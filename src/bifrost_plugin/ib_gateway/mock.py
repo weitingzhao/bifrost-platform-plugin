@@ -40,6 +40,7 @@ class MockGateway:
 
     async def handle_command(self, msg: CommandMessage) -> Dict[str, Any]:
         self._cmd_count += 1
+        payload = msg.payload
         if msg.op == "ping":
             return {
                 "ok": True,
@@ -49,16 +50,107 @@ class MockGateway:
                     "slots": [s.slot for s in self._settings.slots],
                 },
             }
+        if msg.op == "disconnect_all":
+            return {"ok": True, "data": {"mode": "mock", "disconnected": True}}
+        if msg.op == "reconnect_all":
+            return {"ok": True, "data": {"mode": "mock", "reconnected": True}}
         if msg.op == "fetch_accounts_snapshot":
             return {"ok": True, "data": {"accounts": self._mock_accounts()}}
+        if msg.op == "fetch_executions":
+            return {
+                "ok": True,
+                "data": {
+                    "executions": [
+                        {
+                            "exec_id": "mock-1",
+                            "symbol": "SPY",
+                            "sec_type": "STK",
+                            "side": "BOT",
+                            "shares": 100.0,
+                            "price": 560.0,
+                            "ts": time.time(),
+                        }
+                    ]
+                },
+            }
         if msg.op == "fetch_bars":
-            sym = str(msg.payload.get("symbol") or "SPY").upper()
+            sym = str(payload.get("symbol") or "SPY").upper()
             return {
                 "ok": True,
                 "data": {
                     "bars": [
                         {"symbol": sym, "close": self._prices.get(sym, 100.0), "ts": time.time()},
                     ]
+                },
+            }
+        if msg.op == "fetch_bars_range":
+            sym = str(payload.get("symbol") or "SPY").upper()
+            base = self._prices.get(sym, 100.0)
+            now = time.time()
+            return {
+                "ok": True,
+                "data": {
+                    "bars": [
+                        {
+                            "bar_time": now - 86400,
+                            "open": base - 1,
+                            "high": base + 1,
+                            "low": base - 2,
+                            "close": base,
+                            "volume": 1000000,
+                            "date": "mock",
+                        },
+                        {
+                            "bar_time": now,
+                            "open": base,
+                            "high": base + 0.5,
+                            "low": base - 0.5,
+                            "close": base + 0.25,
+                            "volume": 900000,
+                            "date": "mock",
+                        },
+                    ]
+                },
+            }
+        if msg.op == "fetch_option_expirations":
+            sym = str(payload.get("symbol") or "NVDA").upper()
+            return {
+                "ok": True,
+                "data": {
+                    "expirations": ["20260718", "20260815"],
+                    "strikes": [120.0, 130.0, 140.0],
+                    "symbol": sym,
+                },
+            }
+        if msg.op == "fetch_option_snapshot":
+            sym = str(payload.get("symbol") or "NVDA").upper()
+            exp = str(payload.get("expiration") or "20260718")
+            return {
+                "ok": True,
+                "data": {
+                    "underlying_price": self._prices.get(sym, 130.0),
+                    "rows": [
+                        {
+                            "strike": 130.0,
+                            "right": "C",
+                            "bid": 5.1,
+                            "ask": 5.3,
+                            "last": 5.2,
+                            "mid": 5.2,
+                            "symbol": sym,
+                            "expiration": exp,
+                        },
+                        {
+                            "strike": 130.0,
+                            "right": "P",
+                            "bid": 4.8,
+                            "ask": 5.0,
+                            "last": 4.9,
+                            "mid": 4.9,
+                            "symbol": sym,
+                            "expiration": exp,
+                        },
+                    ],
                 },
             }
         return {"ok": False, "error": f"mock_unsupported_op:{msg.op}"}
