@@ -1,4 +1,4 @@
-.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-rpc-parity verify-trade-ib-health verify-trade-celery-bars verify-trade-ib-ui verify-trade-ib-migration-program rollout-tibm-w1-stg verify-trade-ib-w1-stg verify-ib-gateway-program verify-trade-cutover verify-trade-quotes-e2e sync-redis-ib-secrets test lint
+.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-rpc-parity verify-trade-ib-health verify-trade-celery-bars verify-trade-ib-ui verify-trade-ib-migration-program verify-trade-ib-migration-program-dev sync-redis-ib-dev-compose-config rollout-tibm-w1-stg verify-trade-ib-w1-stg rollout-tibm-w2-stg verify-trade-ib-w2-stg rollout-tibm-w3-stg verify-trade-ib-w3-stg verify-trade-ib-rollout-stg rollout-tibm-dev-compose verify-trade-ib-rollout-dev-compose verify-ib-gateway-program verify-trade-cutover verify-trade-quotes-e2e sync-redis-ib-secrets test lint
 
 KUBECONFIG ?= $(HOME)/.kube/bifrost-k3s.yaml
 export KUBECONFIG
@@ -46,6 +46,18 @@ verify-trade-ib-migration-program:
 	chmod +x scripts/verify-trade-ib-migration-program.sh
 	./scripts/verify-trade-ib-migration-program.sh
 
+verify-trade-ib-migration-program-dev:
+	chmod +x scripts/verify-trade-ib-migration-program-dev.sh scripts/verify-trade-ib-dev-read.sh
+	./scripts/verify-trade-ib-migration-program-dev.sh
+
+verify-trade-ib-dev-read:
+	chmod +x scripts/verify-trade-ib-dev-read.sh
+	./scripts/verify-trade-ib-dev-read.sh
+
+sync-redis-ib-dev-compose-config:
+	chmod +x scripts/sync-redis-ib-dev-compose-config.sh
+	./scripts/sync-redis-ib-dev-compose-config.sh
+
 rollout-tibm-w1-stg:
 	chmod +x scripts/rollout-tibm-w1-stg.sh
 	./scripts/rollout-tibm-w1-stg.sh
@@ -53,6 +65,34 @@ rollout-tibm-w1-stg:
 verify-trade-ib-w1-stg:
 	chmod +x scripts/verify-trade-ib-w1-stg.sh
 	./scripts/verify-trade-ib-w1-stg.sh
+
+rollout-tibm-w2-stg:
+	chmod +x scripts/rollout-tibm-w2-stg.sh
+	./scripts/rollout-tibm-w2-stg.sh
+
+verify-trade-ib-w2-stg:
+	chmod +x scripts/verify-trade-ib-w2-stg.sh
+	./scripts/verify-trade-ib-w2-stg.sh
+
+rollout-tibm-w3-stg:
+	chmod +x scripts/rollout-tibm-w3-stg.sh
+	./scripts/rollout-tibm-w3-stg.sh
+
+verify-trade-ib-w3-stg:
+	chmod +x scripts/verify-trade-ib-w3-stg.sh
+	./scripts/verify-trade-ib-w3-stg.sh
+
+verify-trade-ib-rollout-stg:
+	chmod +x scripts/verify-trade-ib-rollout-stg.sh
+	./scripts/verify-trade-ib-rollout-stg.sh
+
+rollout-tibm-dev-compose:
+	chmod +x scripts/rollout-tibm-dev-compose.sh scripts/ensure-redis-ib-port-forward.sh
+	./scripts/rollout-tibm-dev-compose.sh
+
+verify-trade-ib-rollout-dev-compose:
+	chmod +x scripts/verify-trade-ib-rollout-dev-compose.sh scripts/ensure-redis-ib-port-forward.sh
+	./scripts/verify-trade-ib-rollout-dev-compose.sh
 
 verify-ib-gateway-program:
 	chmod +x scripts/verify-ib-gateway-program.sh

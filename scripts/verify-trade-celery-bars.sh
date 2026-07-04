@@ -7,8 +7,9 @@ ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
 source "$ENV_FILE"
-
-REDIS_URL="redis://trade-prod:${REDIS_IB_TRADE_PROD_PASS}@127.0.0.1:6379"
+# shellcheck disable=SC1091
+source "$(dirname "$0")/lib/tibm_redis_acl.sh"
+REDIS_URL="$(tibm_redis_url)"
 
 rpc_op() {
   local op="$1"

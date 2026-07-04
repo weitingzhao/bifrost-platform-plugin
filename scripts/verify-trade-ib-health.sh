@@ -36,12 +36,17 @@ check_hash "bifrost:health:ws_ib_account_agent" "account_agent"
 check_hash "bifrost:health:ws_ib_operator" "operator"
 
 echo "== [3/3] Canonical tick read path (S01) =="
-TICK=$(kubectl exec -n data deploy/redis-ib -- redis-cli -u "$GW_URL" --no-auth-warning GET "ib:ingester:tick:NVDA|STK|||")
-if [[ -z "$TICK" || "$TICK" != *"bid"* ]]; then
-  echo "ERROR: NVDA tick missing on redis-ib" >&2
-  exit 1
+INGESTOR_MODE=$(kubectl exec -n data deploy/redis-ib -- redis-cli -u "$GW_URL" --no-auth-warning HGET "bifrost:health:ws_ib_ingestor" mode)
+if [[ "$INGESTOR_MODE" == "mock" ]]; then
+  echo "  WARN: ingestor mode=mock — skip NVDA tick (live TWS not required for STG rollout)"
+else
+  TICK=$(kubectl exec -n data deploy/redis-ib -- redis-cli -u "$GW_URL" --no-auth-warning GET "ib:ingester:tick:NVDA|STK|||")
+  if [[ -z "$TICK" || "$TICK" != *"bid"* ]]; then
+    echo "ERROR: NVDA tick missing on redis-ib" >&2
+    exit 1
+  fi
+  echo "  tick NVDA OK"
 fi
-echo "  tick NVDA OK"
 
 echo
 echo "Trade IB health (TIBM2) verification OK — Monitor API should expose socket.platform_ib_gateway after bifrost-core 0.2.9 deploy"
