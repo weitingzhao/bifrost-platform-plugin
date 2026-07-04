@@ -1,0 +1,15 @@
+# Trade dev — short name redis-ib → data NS
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-ib
+  labels:
+    app.kubernetes.io/name: redis-ib
+    bifrost.io/external-alias: "true"
+spec:
+  type: ExternalName
+  externalName: redis-ib.data.svc.cluster.local
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379

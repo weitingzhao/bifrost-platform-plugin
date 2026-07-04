@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bifrost-plugin"
+version = "0.1.0"
+description = "Bifrost Ops Platform plugins — domain-specific control-plane extensions"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "redis>=5.0",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+ib = [
+  "ib-insync>=0.9.86",
+]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.8",
+]
+
+[project.scripts]
+ib-gateway = "bifrost_plugin.ib_gateway.runner:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

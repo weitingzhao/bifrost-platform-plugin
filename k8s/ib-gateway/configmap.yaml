@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ib-gateway-config
+data:
+  mode: mock
+  gateway.yaml: |
+    mode: mock
+    env: platform
+    redis:
+      host: redis-ib.data.svc.cluster.local
+      port: 6379
+      username: ib-gateway
+      db: 0
+    watchlist_symbols: [NVDA, AAPL, SPY, QQQ, TSLA]
+    ib:
+      host:
+        ip: 192.168.10.30
+        port_type: tws_live
+        account: wzhao1503
+        client_ids: [1, 2]
+      secondary:
+        ip: 192.168.10.32
+        port_type: tws_live
+        account: vzhao1503
+        client_ids: [1, 2]
+    probe_interval_sec: 60
+    health_ttl_sec: 30

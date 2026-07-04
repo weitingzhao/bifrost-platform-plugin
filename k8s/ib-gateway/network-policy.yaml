@@ -1,0 +1,40 @@
+# IB Gateway egress — redis-ib @ data NS + TWS LAN hosts.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ib-gateway-egress
+  labels:
+    app.kubernetes.io/name: ib-gateway
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ib-gateway
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: data
+    - to:
+        - ipBlock:
+            cidr: 192.168.10.30/32
+        - ipBlock:
+            cidr: 192.168.10.32/32
+      ports:
+        - protocol: TCP
+          port: 7496
+        - protocol: TCP
+          port: 7497
+        - protocol: TCP
+          port: 4001
+        - protocol: TCP
+          port: 4002
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
