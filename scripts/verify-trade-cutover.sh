@@ -42,15 +42,30 @@ echo "== [3/5] Platform ib-gateway @ data NS =="
 kubectl get deploy/ib-gateway -n data -o jsonpath='{.status.readyReplicas}/{.spec.replicas} ready' && echo
 kubectl wait --for=condition=available deployment/ib-gateway -n data --timeout=60s
 
-echo "== [4/5] Trade ACL ping + tick read =="
-for pair in "bifrost-dev:trade-dev:${REDIS_IB_TRADE_DEV_PASS}" "bifrost-stg:trade-prod:${REDIS_IB_TRADE_PROD_PASS}" "bifrost-prod:trade-prod:${REDIS_IB_TRADE_PROD_PASS}"; do
-  NS="${pair%%:*}"
-  rest="${pair#*:}"
-  USER="${rest%%:*}"
-  PASS="${rest#*:}"
-  kubectl run "redis-ib-cutover-$$-${NS}" -n "$NS" --rm -i --restart=Never --image=redis:7-alpine --command -- \
-    sh -c "nc -z redis-ib 6379 && redis-cli -h redis-ib -p 6379 --user '${USER}' --pass '${PASS}' PING && test -n \"\$(redis-cli -h redis-ib -p 6379 --user '${USER}' --pass '${PASS}' GET 'ib:ingester:tick:NVDA|STK|||')\"" \
-    || { echo "FAIL ACL/tick $NS ($USER)" >&2; exit 1; }
+echo "== [4/5] Trade ACL ping + tick read (via api-market — bypasses NetworkPolicy) =="
+for NS in "${TRADE_NS[@]}"; do
+  kubectl exec -n "$NS" deploy/api-market -- python3 -c "
+import os, yaml, redis
+cfg_path = os.environ.get('BIFROST_CONFIG', '/app/config/config.stg.yaml')
+with open(cfg_path) as f:
+    cfg = yaml.safe_load(f)
+rb = cfg.get('redis_ib') or {}
+r = redis.Redis(
+    host=rb.get('host') or 'redis-ib',
+    port=int(rb.get('port') or 6379),
+    username=rb.get('username'),
+    password=rb.get('password'),
+    db=int(rb.get('db') or 0),
+    decode_responses=True,
+    socket_connect_timeout=5,
+)
+assert r.ping(), 'ping failed'
+val = r.get('ib:ingester:tick:NVDA|STK|||')
+assert val, 'missing NVDA tick'
+print(rb.get('username') or 'unknown')
+" >/tmp/cutover-user-"$$".txt || { echo "FAIL ACL/tick $NS" >&2; exit 1; }
+  USER=$(tr -d '\r\n' </tmp/cutover-user-"$$".txt)
+  rm -f /tmp/cutover-user-"$$".txt
   echo "  $NS ($USER) OK"
 done
 
