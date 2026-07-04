@@ -40,7 +40,7 @@ print('  contract_key OK symbol=', d.get('symbol'))
 
 echo "== [2/3] Trade pod redis-ib read (same key) =="
 kubectl run "quotes-e2e-$$" -n "$TRADE_NS" --rm -i --restart=Never --image=redis:7-alpine --command -- \
-  sh -c "redis-cli -h redis-ib -p 6379 --user trade-prod --pass '${REDIS_IB_TRADE_PROD_PASS}' --no-auth-warning GET 'ib:ingester:tick:${TICK_KEY}' | grep -q contract_key"
+  sh -c "nc -z redis-ib 6379 && redis-cli -h redis-ib -p 6379 --user trade-prod --pass '${REDIS_IB_TRADE_PROD_PASS}' --no-auth-warning GET 'ib:ingester:tick:${TICK_KEY}' | grep -q contract_key"
 echo "  ${TRADE_NS} → redis-ib tick OK"
 
 echo "== [3/3] Market API GET /quotes (HTTP via Traefik) =="
