@@ -19,3 +19,18 @@ IB_OPERATOR_RESULT_PREFIX = "ib:operator:result:"
 IB_OPERATOR_RESULT_TTL_SEC = 300
 
 IB_GATEWAY_HEALTH_PREFIX = "ib:health:"
+
+# Canonical STK contract_key — must match bifrost_core / trade-socket ingestor.
+STK_CONTRACT_KEY_SUFFIX = "|STK|||"
+
+
+def stk_contract_key(symbol: str) -> str:
+    """Build legacy-compatible STK tick key suffix (e.g. ``NVDA|STK|||``)."""
+    sym = (symbol or "").strip().upper()
+    if not sym:
+        raise ValueError("symbol required for stk_contract_key")
+    return f"{sym}{STK_CONTRACT_KEY_SUFFIX}"
+
+
+def ingester_tick_key(contract_key: str) -> str:
+    return IB_INGESTER_TICK_PREFIX + contract_key

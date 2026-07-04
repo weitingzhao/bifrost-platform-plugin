@@ -24,7 +24,8 @@ class RedisIbConfig:
 REDIS_IB_KEY_PREFIX = "ib:"
 
 # Shared key namespaces (must stay aligned with Trade consumers)
-REDIS_TICK_PATTERN = "ib:ingester:tick:{symbol}"
+REDIS_TICK_PATTERN = "ib:ingester:tick:{contract_key}"
+STK_TICK_EXAMPLE = "NVDA|STK|||"
 REDIS_ACCOUNT_POSITIONS = "ib:account:{account_id}:positions"
 REDIS_ACCOUNT_SUMMARY = "ib:account:{account_id}:summary"
 REDIS_OPERATOR_CMD = "ib:operator:cmd"

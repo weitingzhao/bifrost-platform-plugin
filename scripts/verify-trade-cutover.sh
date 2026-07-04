@@ -49,7 +49,7 @@ for pair in "bifrost-dev:trade-dev:${REDIS_IB_TRADE_DEV_PASS}" "bifrost-stg:trad
   USER="${rest%%:*}"
   PASS="${rest#*:}"
   kubectl run "redis-ib-cutover-$$-${NS}" -n "$NS" --rm -i --restart=Never --image=redis:7-alpine --command -- \
-    sh -c "nc -z redis-ib 6379 && redis-cli -h redis-ib -p 6379 --user '${USER}' --pass '${PASS}' PING && test -n \"\$(redis-cli -h redis-ib -p 6379 --user '${USER}' --pass '${PASS}' GET ib:ingester:tick:NVDA)\"" \
+    sh -c "nc -z redis-ib 6379 && redis-cli -h redis-ib -p 6379 --user '${USER}' --pass '${PASS}' PING && test -n \"\$(redis-cli -h redis-ib -p 6379 --user '${USER}' --pass '${PASS}' GET 'ib:ingester:tick:NVDA|STK|||')\"" \
     || { echo "FAIL ACL/tick $NS ($USER)" >&2; exit 1; }
   echo "  $NS ($USER) OK"
 done

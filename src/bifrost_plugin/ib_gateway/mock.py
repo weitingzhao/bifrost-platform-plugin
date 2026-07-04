@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from bifrost_plugin.ib_gateway.protocol import CommandMessage, dumps_result
 from bifrost_plugin.ib_gateway.settings import GatewaySettings
+from bifrost_plugin.ib_gateway.redis_keys import stk_contract_key
 from bifrost_plugin.ib_gateway.writer import GatewayRedisWriter
 
 logger = logging.getLogger(__name__)
@@ -80,18 +81,19 @@ class MockGateway:
                 spread = max(0.01, round(base * 0.0005, 2))
                 bid = round(base - spread, 2)
                 ask = round(base + spread, 2)
+                contract_key = stk_contract_key(sym)
                 payload = {
                     "bid": bid,
                     "ask": ask,
                     "last": round(base, 2),
                     "mid": round((bid + ask) / 2, 4),
                     "ts": time.time(),
-                    "contract_key": sym,
+                    "contract_key": contract_key,
                     "symbol": sym,
                     "sec_type": "STK",
                 }
-                self._writer.write_tick(sym, payload)
-            self._writer.set_subscriptions(set(symbols))
+                self._writer.write_tick(contract_key, payload)
+            self._writer.set_subscriptions({stk_contract_key(sym) for sym in symbols})
             self._writer.write_account_snapshot(
                 {
                     "host_connected": True,

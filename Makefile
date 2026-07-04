@@ -1,4 +1,4 @@
-.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-program verify-trade-cutover sync-redis-ib-secrets test lint
+.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-program verify-trade-cutover verify-trade-quotes-e2e sync-redis-ib-secrets test lint
 
 KUBECONFIG ?= $(HOME)/.kube/bifrost-k3s.yaml
 export KUBECONFIG
@@ -33,6 +33,10 @@ verify-ib-gateway-program:
 verify-trade-cutover:
 	chmod +x scripts/verify-trade-cutover.sh scripts/lib/redis_operator_ping.sh
 	./scripts/verify-trade-cutover.sh
+
+verify-trade-quotes-e2e:
+	chmod +x scripts/verify-trade-quotes-e2e.sh
+	./scripts/verify-trade-quotes-e2e.sh
 
 sync-redis-ib-secrets:
 	chmod +x scripts/sync_redis_ib_secrets.sh

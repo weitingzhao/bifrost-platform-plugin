@@ -6,15 +6,19 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLATFORM_API="${PLATFORM_API:-http://127.0.0.1:8780}"
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 
-echo "== [1/3] Trade cutover (IBGP3) =="
+echo "== [1/4] Trade cutover (IBGP3) =="
 make -C "$ROOT" verify-trade-cutover
 
 echo ""
-echo "== [2/3] Live TWS (IBGP4) =="
+echo "== [2/4] Live TWS (IBGP4) =="
 make -C "$ROOT" verify-ib-gateway-live
 
 echo ""
-echo "== [3/3] Program status aggregate =="
+echo "== [3/4] Trade quotes E2E (canonical tick + Market API) =="
+make -C "$ROOT" verify-trade-quotes-e2e
+
+echo ""
+echo "== [4/4] Program status aggregate =="
 curl -sS "${PLATFORM_API}/api/v1/plugins/ib-gateway/status" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)

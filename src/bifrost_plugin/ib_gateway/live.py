@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from bifrost_plugin.ib_gateway.connection import ConnectionState, SlotConnection
 from bifrost_plugin.ib_gateway.protocol import CommandMessage
 from bifrost_plugin.ib_gateway.settings import GatewaySettings, TwsSlotConfig
+from bifrost_plugin.ib_gateway.redis_keys import stk_contract_key
 from bifrost_plugin.ib_gateway.writer import GatewayRedisWriter
 
 logger = logging.getLogger(__name__)
@@ -130,20 +131,23 @@ class LiveGateway:
                     contract = Stock(sym, "SMART", "USD")
                     ticker = host.ib.reqMktData(contract, "", False, False)
                     self._tickers.append((sym, ticker))
-                self._writer.set_subscriptions(set(self._settings.watchlist_symbols))
+                self._writer.set_subscriptions(
+                    {stk_contract_key(sym) for sym in self._settings.watchlist_symbols}
+                )
 
             for sym, ticker in self._tickers:
+                contract_key = stk_contract_key(sym)
                 payload = {
                     "bid": _float_or_none(ticker.bid),
                     "ask": _float_or_none(ticker.ask),
                     "last": _float_or_none(ticker.last),
                     "mid": _float_or_none(ticker.midpoint()),
                     "ts": time.time(),
-                    "contract_key": sym,
+                    "contract_key": contract_key,
                     "symbol": sym,
                     "sec_type": "STK",
                 }
-                self._writer.write_tick(sym, payload)
+                self._writer.write_tick(contract_key, payload)
                 host.note_message()
 
             snap_accounts = []

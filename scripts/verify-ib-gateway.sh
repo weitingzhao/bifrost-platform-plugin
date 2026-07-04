@@ -15,8 +15,8 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=ib-gateway -n d
 echo "== legacy health keys on redis-ib =="
 kubectl exec -n data deploy/redis-ib -- redis-cli -u "redis://ib-gateway:${REDIS_IB_GATEWAY_PASS}@127.0.0.1:6379" HGETALL bifrost:health:ws_ib_ingestor | head -20
 
-echo "== sample tick (expect JSON bid/ask) =="
-TICK=$(kubectl exec -n data deploy/redis-ib -- redis-cli -u "redis://ib-gateway:${REDIS_IB_GATEWAY_PASS}@127.0.0.1:6379" GET ib:ingester:tick:NVDA)
+echo "== sample tick (canonical STK contract_key) =="
+TICK=$(kubectl exec -n data deploy/redis-ib -- redis-cli -u "redis://ib-gateway:${REDIS_IB_GATEWAY_PASS}@127.0.0.1:6379" --no-auth-warning GET "ib:ingester:tick:NVDA|STK|||")
 echo "$TICK" | head -c 200
 echo
 if [[ -z "$TICK" || "$TICK" != *"bid"* ]]; then
