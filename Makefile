@@ -1,4 +1,4 @@
-.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-rpc-parity verify-trade-ib-health verify-trade-celery-bars verify-trade-ib-ui verify-trade-ib-migration-program verify-ib-gateway-program verify-trade-cutover verify-trade-quotes-e2e sync-redis-ib-secrets test lint
+.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-rpc-parity verify-trade-ib-health verify-trade-celery-bars verify-trade-ib-ui verify-trade-ib-migration-program rollout-tibm-w1-stg verify-trade-ib-w1-stg verify-ib-gateway-program verify-trade-cutover verify-trade-quotes-e2e sync-redis-ib-secrets test lint
 
 KUBECONFIG ?= $(HOME)/.kube/bifrost-k3s.yaml
 export KUBECONFIG
@@ -45,6 +45,14 @@ verify-trade-ib-ui:
 verify-trade-ib-migration-program:
 	chmod +x scripts/verify-trade-ib-migration-program.sh
 	./scripts/verify-trade-ib-migration-program.sh
+
+rollout-tibm-w1-stg:
+	chmod +x scripts/rollout-tibm-w1-stg.sh
+	./scripts/rollout-tibm-w1-stg.sh
+
+verify-trade-ib-w1-stg:
+	chmod +x scripts/verify-trade-ib-w1-stg.sh
+	./scripts/verify-trade-ib-w1-stg.sh
 
 verify-ib-gateway-program:
 	chmod +x scripts/verify-ib-gateway-program.sh
