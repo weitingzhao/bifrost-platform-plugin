@@ -34,6 +34,7 @@ echo "== [1/2] Gateway pod ready =="
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=ib-gateway -n data --timeout=60s
 
 echo "== [2/2] ALL_OPS smoke via $(tibm_redis_acl_user) ACL =="
+GW_MODE=$(kubectl get configmap ib-gateway-config -n data -o jsonpath='{.data.mode}' 2>/dev/null || echo mock)
 rpc_ping ping '{}'
 rpc_ping fetch_accounts_snapshot '{}'
 rpc_ping fetch_bars '{"symbol":"NVDA","period":"1 day","duration":"1 D"}'
@@ -41,8 +42,16 @@ rpc_ping fetch_bars_range '{"symbol":"SPY","period":"1 D"}'
 rpc_ping fetch_executions '{"days":1}'
 rpc_ping fetch_option_expirations '{"symbol":"NVDA"}'
 rpc_ping fetch_option_snapshot '{"symbol":"NVDA","expiration":"20260718","strikes":[130]}'
-rpc_ping disconnect_all '{}'
-rpc_ping reconnect_all '{}'
+if [[ "$GW_MODE" == "live" ]]; then
+  echo "  WARN: skip disconnect_all/reconnect_all (live TWS — disruptive to production slots)"
+else
+  rpc_ping disconnect_all '{}'
+  rpc_ping reconnect_all '{}'
+fi
 
 echo
-echo "IB Gateway RPC parity verification OK (9/9 ops)"
+if [[ "$GW_MODE" == "live" ]]; then
+  echo "IB Gateway RPC parity verification OK (7/7 ops; live mode skips disconnect/reconnect)"
+else
+  echo "IB Gateway RPC parity verification OK (9/9 ops)"
+fi

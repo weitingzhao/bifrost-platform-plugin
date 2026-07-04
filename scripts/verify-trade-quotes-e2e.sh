@@ -39,9 +39,19 @@ print('  contract_key OK symbol=', d.get('symbol'))
 "
 
 echo "== [2/3] Trade pod redis-ib read (same key) =="
-kubectl run "quotes-e2e-$$" -n "$TRADE_NS" --rm -i --restart=Never --image=redis:7-alpine --command -- \
-  sh -c "nc -z redis-ib 6379 && redis-cli -h redis-ib -p 6379 --user trade-prod --pass '${REDIS_IB_TRADE_PROD_PASS}' --no-auth-warning GET 'ib:ingester:tick:${TICK_KEY}' | grep -q contract_key"
-echo "  ${TRADE_NS} → redis-ib tick OK"
+kubectl exec -n "$TRADE_NS" deploy/api-market -- python3 -c "
+import os, redis
+from bifrost_core.core.redis_url import ib_redis_url_from_config
+import yaml
+with open(os.environ.get('BIFROST_CONFIG', '/app/config/config.stg.yaml')) as f:
+    cfg = yaml.safe_load(f)
+url = ib_redis_url_from_config(cfg)
+r = redis.from_url(url, decode_responses=True, socket_connect_timeout=5)
+key = 'ib:ingester:tick:${TICK_KEY}'
+val = r.get(key)
+assert val and 'contract_key' in val, f'missing tick {key}'
+print('  ${TRADE_NS} api-market → redis-ib tick OK')
+"
 
 echo "== [3/3] Market API GET /quotes (HTTP via Traefik) =="
 CORE_VER=$(kubectl exec -n "$TRADE_NS" deploy/api-market -- python3 -c "

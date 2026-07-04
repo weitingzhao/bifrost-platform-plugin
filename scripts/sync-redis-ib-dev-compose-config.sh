@@ -61,6 +61,29 @@ else:
 
 path.write_text(out, encoding="utf-8")
 print(f"Updated {path} redis_ib → {username} @ {host}:{port}")
+
+ib_op = """ib_operator:
+  enabled: true
+  stream: "ib:operator:cmd"
+  consumer_group: ib-operator
+  result_prefix: "ib:operator:result:"
+  health_key: "bifrost:health:ws_ib_operator"
+  result_ttl_sec: 300
+  request_timeout_sec: 120
+  bars_backfill_request_timeout_sec: 7200
+  health_refresh_sec: 30
+  max_result_bytes: 4194304
+  block_ms: 5000
+  use_for_celery_bars: true
+"""
+text = path.read_text(encoding="utf-8")
+if not re.search(r"^ib_operator:\n", text, re.MULTILINE):
+    anchor = re.search(r"^redis_ib:\n(?:  .+\n)+", text, re.MULTILINE)
+    if anchor:
+        insert_at = anchor.end()
+        text = text[:insert_at] + "\n" + ib_op + text[insert_at:]
+        path.write_text(text, encoding="utf-8")
+        print(f"Added ib_operator block to {path}")
 PY
 
 echo "Hint: ensure redis-ib reachable from compose — e.g. kubectl port-forward -n data svc/redis-ib ${REDIS_IB_PORT}:6379"

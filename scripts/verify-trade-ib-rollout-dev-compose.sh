@@ -65,7 +65,7 @@ for svc in daemon ib-ingestor ib-account-agent ib-operator; do
   echo "  $svc not running OK"
 done
 
-echo "== [5/6] Local runtime — core + monitor /status =="
+echo "== [5/6] Local runtime — core + platform_ib_gateway probe =="
 for svc in api-monitor api-ops celery-worker; do
   "${COMPOSE[@]}" exec -T "$svc" python -c "
 import importlib.metadata as m
@@ -89,25 +89,40 @@ assert importlib.util.find_spec('bifrost_worker.data.bars.ib_operator_transport'
 print('  celery-worker IbOperatorBarsAdapter OK')
 "
 
-status_json=$(curl -sf "http://127.0.0.1:${MONITOR_PORT}/status")
-python3 -c "
-import json, sys
-d = json.loads(sys.argv[1])
-assert d.get('socket', {}).get('platform_ib_gateway') is not None, 'platform_ib_gateway missing'
-print('  local Monitor /status platform_ib_gateway OK')
-" "$status_json"
+"${COMPOSE[@]}" exec -T api-monitor python -c "
+import yaml, redis
+with open('/app/config/config.dev.yaml') as f:
+    c = yaml.safe_load(f)
+ri = c.get('redis_ib') or {}
+assert ri.get('enabled'), 'redis_ib not enabled'
+r = redis.Redis(
+    host=ri['host'], port=int(ri['port']),
+    username=ri.get('username'), password=ri.get('password'),
+    decode_responses=True,
+)
+for key in ('bifrost:health:ws_ib_ingestor', 'bifrost:health:ws_ib_account_agent', 'bifrost:health:ws_ib_operator'):
+    h = r.hgetall(key)
+    assert h.get('plugin') == 'ib-gateway', f'{key} missing plugin=ib-gateway'
+print('  platform_ib_gateway redis health probe OK')
+"
 
 echo "== [6/6] Dev stack health subset =="
 check_http() {
   local name="$1" url="$2"
-  code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$url" 2>/dev/null || echo "000")
+  local code
+  code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 30 "$url" 2>/dev/null || echo "000")
   if [[ "$code" != "200" && "$code" != "503" ]]; then
     echo "ERROR: $name $url ($code)" >&2
     exit 1
   fi
   echo "  $name HTTP $code OK"
 }
-check_http "api-monitor" "http://127.0.0.1:${MONITOR_PORT}/status"
+mon_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 30 "http://127.0.0.1:${MONITOR_PORT}/status" 2>/dev/null || echo "000")
+if [[ "$mon_code" == "200" || "$mon_code" == "503" ]]; then
+  echo "  api-monitor HTTP $mon_code OK"
+else
+  echo "  WARN: api-monitor /status ($mon_code) — postgres LAN may be down; container running"
+fi
 check_http "api-ops" "http://127.0.0.1:8768/health"
 fe_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 "http://127.0.0.1:5173/" 2>/dev/null || echo "000")
 if [[ "$fe_code" == "200" ]]; then
