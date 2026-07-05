@@ -1,0 +1,13 @@
+# Production live TWS — apply after base install:
+#   kubectl apply -k k8s/ib-gateway/overlays/live
+# Or: make ib-gateway-set-live (platform-api L1)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: data
+
+resources:
+  - ../../
+
+patches:
+  - path: configmap-patch.yaml
