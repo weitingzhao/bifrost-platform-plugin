@@ -13,6 +13,20 @@ from bifrost_plugin.ib_gateway.settings import TwsSlotConfig
 logger = logging.getLogger(__name__)
 
 
+def _managed_accounts(ib: Any) -> list[str]:
+    try:
+        raw = ib.managedAccounts()
+    except Exception:
+        return []
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        parts = raw.split(",")
+    else:
+        parts = [str(s) for s in raw]
+    return [s.strip() for s in parts if s.strip()]
+
+
 class ConnectionState(enum.Enum):
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
@@ -101,6 +115,10 @@ class SlotConnection:
                     self.state = ConnectionState.CONNECTED
                     self.last_error = None
                     self.note_message()
+                    for _ in range(20):
+                        if _managed_accounts(ib):
+                            break
+                        await asyncio.sleep(0.25)
                     logger.info(
                         "Connected slot=%s cid=%s host=%s:%s",
                         self.cfg.slot,

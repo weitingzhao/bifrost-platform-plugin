@@ -140,6 +140,80 @@ async def fetch_bars_range(
     return all_out
 
 
+def _managed_account_ids(ib: Any) -> List[str]:
+    try:
+        raw = ib.managedAccounts()
+    except Exception as e:
+        logger.warning("managedAccounts: %s", e)
+        return []
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        parts = raw.split(",")
+    else:
+        parts = [str(s) for s in raw]
+    return [s.strip() for s in parts if s.strip()]
+
+
+def position_to_dict(pos: Any) -> Dict[str, Any]:
+    c = pos.contract
+    sec_type = getattr(c, "secType", "") or ""
+    out: Dict[str, Any] = {
+        "account": pos.account,
+        "symbol": getattr(c, "symbol", "") or "",
+        "secType": sec_type,
+        "exchange": getattr(c, "exchange", "") or "",
+        "currency": getattr(c, "currency", "") or "",
+        "position": float(pos.position),
+        "avgCost": float(pos.avgCost) if pos.avgCost is not None else None,
+    }
+    if sec_type == "OPT":
+        out["lastTradeDateOrContractMonth"] = getattr(c, "lastTradeDateOrContractMonth", None) or ""
+        out["strike"] = getattr(c, "strike", None)
+        out["right"] = getattr(c, "right", None) or ""
+        out["multiplier"] = getattr(c, "multiplier", None)
+    return out
+
+
+async def fetch_accounts_snapshot_rows(ib: Any) -> List[Dict[str, Any]]:
+    """Return account summary + positions for all managed accounts on this IB session."""
+    if not getattr(ib, "isConnected", lambda: False)():
+        return []
+    account_ids = _managed_account_ids(ib)
+    if not account_ids:
+        return []
+    try:
+        await ib.reqPositionsAsync()
+        all_positions = list(ib.positions())
+    except Exception as e:
+        logger.warning("reqPositionsAsync: %s", e)
+        all_positions = []
+
+    out: List[Dict[str, Any]] = []
+    for aid in account_ids:
+        summary: Dict[str, Any] = {}
+        try:
+            values = await ib.accountSummaryAsync(aid)
+            for v in values or []:
+                tag = getattr(v, "tag", None)
+                val = getattr(v, "value", None)
+                if tag and val is not None:
+                    summary[str(tag)] = val
+        except Exception as e:
+            logger.warning("accountSummaryAsync %s: %s", aid, e)
+        if aid:
+            summary["account"] = aid
+        acct_positions = [p for p in all_positions if getattr(p, "account", None) == aid]
+        out.append(
+            {
+                "account_id": aid,
+                "summary": summary,
+                "positions": [position_to_dict(p) for p in acct_positions],
+            }
+        )
+    return out
+
+
 async def fetch_executions(ib: Any, *, days: int = 7, account: Optional[str] = None) -> List[Dict[str, Any]]:
     from ib_insync import ExecutionFilter, Fill  # noqa: PLC0415
 
