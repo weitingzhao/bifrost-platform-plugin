@@ -44,3 +44,6 @@ kubectl apply -k "$ROOT/k8s/ib-gateway"
 echo "Waiting for ib-gateway rollout..."
 kubectl rollout status deployment/ib-gateway -n data --timeout=120s
 kubectl get pods,deploy -n data -l app.kubernetes.io/name=ib-gateway
+
+echo "== Switch mock → live (base k8s/ib-gateway ships mock ConfigMap) =="
+make -C "$ROOT" ib-gateway-set-live
