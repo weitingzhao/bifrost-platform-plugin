@@ -1,5 +1,5 @@
 user default off
 user ib-gateway on >GATEWAY_PASS ~ib:* ~bifrost:health:ws_ib_* allchannels +@all
 user trade-prod on >TRADE_PROD_PASS ~ib:* ~bifrost:health:ws_ib_* allchannels +@all
-user trade-dev on >TRADE_DEV_PASS ~ib:tick:* ~ib:ingester:* ~ib:account:* ~ib:health:* allchannels +@read +ping +info +client|list
+user trade-dev on >TRADE_DEV_PASS ~ib:tick:* ~ib:ingester:* ~ib:account:* ~ib:health:* ~bifrost:health:ws_ib_* allchannels +@read +ping +info +client|list
 user platform on >PLATFORM_PASS ~ib:health:* ~ib:events:* ~ib:control:* ~ib:tick:* ~ib:ingester:* ~ib:account:* ~bifrost:health:ws_ib_* allchannels +@all
