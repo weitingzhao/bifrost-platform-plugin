@@ -55,6 +55,42 @@ class SlotConnection:
     def note_message(self) -> None:
         self.last_message_at = time.time()
 
+    def sync_connection_state(self) -> bool:
+        """Align ``state`` with ib_insync truth. Returns True when still connected."""
+        if self.state != ConnectionState.CONNECTED:
+            return False
+        ib = self.ib
+        if ib is None or not getattr(ib, "isConnected", lambda: False)():
+            logger.warning(
+                "Ghost session slot=%s cid=%s — isConnected=False while state=CONNECTED",
+                self.cfg.slot,
+                self.client_id,
+            )
+            self.ib = None
+            self.state = ConnectionState.DISCONNECTED
+            return False
+        return True
+
+    async def verify_api_alive(self, *, timeout: float = 8.0) -> bool:
+        """Active TWS API probe (reqCurrentTime). False → mark disconnected."""
+        if not self.sync_connection_state():
+            return False
+        ib = self.ib
+        assert ib is not None
+        try:
+            await asyncio.wait_for(ib.reqCurrentTimeAsync(), timeout=timeout)
+            self.note_message()
+            return True
+        except Exception as e:
+            logger.warning(
+                "API verify failed slot=%s cid=%s: %s — forcing disconnect",
+                self.cfg.slot,
+                self.client_id,
+                e,
+            )
+            await self.disconnect()
+            return False
+
     def enter_maintenance(self) -> None:
         self._maintenance = True
         self.state = ConnectionState.MAINTENANCE

@@ -229,9 +229,61 @@ class LiveGateway:
             if host is None or host.ib is None or host.state != ConnectionState.CONNECTED:
                 await asyncio.sleep(2)
                 continue
+            if not host.sync_connection_state():
+                self._tickers.clear()
+                await asyncio.sleep(2)
+                continue
             if not host.cfg.has_market_data:
                 await asyncio.sleep(5)
                 continue
+
+            # Account truth before tick optimism: empty managedAccounts = ghost session.
+            snap_accounts: List[Dict[str, Any]] = []
+            seen_accounts: set[str] = set()
+            ghost_slots: List[SlotConnection] = []
+            for sc in self._slots.values():
+                if sc.ib is None or sc.state != ConnectionState.CONNECTED:
+                    continue
+                if not sc.sync_connection_state():
+                    ghost_slots.append(sc)
+                    continue
+                rows = await fetch_accounts_snapshot_rows(sc.ib)
+                if not rows:
+                    logger.warning(
+                        "Ghost session slot=%s cid=%s — connected but managedAccounts empty",
+                        sc.cfg.slot,
+                        sc.client_id,
+                    )
+                    ghost_slots.append(sc)
+                    continue
+                sc.note_message()
+                for row in rows:
+                    aid = str(row.get("account_id") or "").strip()
+                    if not aid or aid in seen_accounts:
+                        continue
+                    seen_accounts.add(aid)
+                    snap_accounts.append({**row, "slot": sc.cfg.slot})
+            for sc in ghost_slots:
+                await sc.disconnect()
+            if ghost_slots:
+                self._tickers.clear()
+
+            host = self._slots.get("host")
+            sec = self._slots.get("secondary")
+            self._writer.write_account_snapshot(
+                {
+                    "host_connected": host is not None and host.state == ConnectionState.CONNECTED,
+                    "secondary_connected": sec is not None and sec.state == ConnectionState.CONNECTED,
+                    "accounts_snapshot": snap_accounts,
+                    "accounts_count": len(snap_accounts),
+                    "mode": "live",
+                }
+            )
+
+            if host is None or host.state != ConnectionState.CONNECTED or not snap_accounts:
+                await asyncio.sleep(2)
+                continue
+
             if not self._tickers:
                 for sym in self._settings.watchlist_symbols:
                     contract = Stock(sym, "SMART", "USD")
@@ -256,42 +308,33 @@ class LiveGateway:
                 self._writer.write_tick(contract_key, payload)
                 host.note_message()
 
-            snap_accounts: List[Dict[str, Any]] = []
-            seen_accounts: set[str] = set()
-            for sc in self._slots.values():
-                if sc.ib and sc.state == ConnectionState.CONNECTED:
-                    rows = await fetch_accounts_snapshot_rows(sc.ib)
-                    for row in rows:
-                        aid = str(row.get("account_id") or "").strip()
-                        if not aid or aid in seen_accounts:
-                            continue
-                        seen_accounts.add(aid)
-                        snap_accounts.append({**row, "slot": sc.cfg.slot})
-            self._writer.write_account_snapshot(
-                {
-                    "host_connected": host.state == ConnectionState.CONNECTED,
-                    "secondary_connected": (
-                        self._slots.get("secondary") is not None
-                        and self._slots["secondary"].state == ConnectionState.CONNECTED
-                    ),
-                    "accounts_snapshot": snap_accounts,
-                    "mode": "live",
-                }
-            )
             await asyncio.sleep(2)
 
     async def _health_loop(self, stop: asyncio.Event) -> None:
+        verify_every = 3  # every ~30s (loop sleeps 10s)
+        tick = 0
         while not stop.is_set():
-            now = time.time()
+            tick += 1
+            for sc in self._slots.values():
+                sc.sync_connection_state()
+            if tick % verify_every == 0:
+                for sc in list(self._slots.values()):
+                    if sc.state == ConnectionState.CONNECTED:
+                        await sc.verify_api_alive()
+
             host = self._slots.get("host")
             sec = self._slots.get("secondary")
             host_ok = host is not None and host.state == ConnectionState.CONNECTED
             sec_ok = sec is not None and sec.state == ConnectionState.CONNECTED
+            # Use real IB activity timestamps — never wall-clock alone (hides ghost sessions).
+            last_host = host.last_message_at if host else 0.0
+            last_sec = sec.last_message_at if sec else 0.0
+            last_any = max(last_host, last_sec)
             self._writer.write_ingestor_health(
                 {
                     "connected": host_ok,
                     "client_id": host.client_id if host else 0,
-                    "last_msg_ts": host.last_message_at if host else 0,
+                    "last_msg_ts": last_host,
                     "reconnects": host.reconnects if host else 0,
                     "mode": "live",
                 }
@@ -302,11 +345,13 @@ class LiveGateway:
                     "host_client_id": host.client_id if host else 0,
                     "secondary_connected": sec_ok,
                     "secondary_client_id": sec.client_id if sec else 0,
-                    "last_msg_ts": now,
+                    "last_msg_ts": last_any,
                     "mode": "live",
                 }
             )
-            self._writer.write_operator_health({**self.health_dict(), "last_msg_ts": now})
+            self._writer.write_operator_health(
+                {**self.health_dict(), "last_msg_ts": last_any}
+            )
             for sc in self._slots.values():
                 st = "connected" if sc.state == ConnectionState.CONNECTED else sc.state.value
                 self._writer.write_plugin_health(
