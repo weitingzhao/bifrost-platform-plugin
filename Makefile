@@ -1,4 +1,4 @@
-.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-rpc-parity verify-trade-ib-health verify-trade-celery-bars verify-trade-ib-ui verify-trade-ib-migration-program verify-trade-ib-migration-program-dev sync-redis-ib-dev-compose-config rollout-tibm-w1-stg verify-trade-ib-w1-stg rollout-tibm-w2-stg verify-trade-ib-w2-stg rollout-tibm-w3-stg verify-trade-ib-w3-stg verify-trade-ib-rollout-stg rollout-tibm-dev-compose verify-trade-ib-rollout-dev-compose rollout-tibm-prod verify-trade-ib-w1-prod verify-trade-ib-w2-prod verify-trade-ib-w3-prod verify-trade-ib-rollout-prod rollout-tibm-strategy verify-tibm-strategy-alignment ib-gateway-set-live verify-ib-gateway-program verify-trade-cutover verify-trade-quotes-e2e sync-redis-ib-secrets test lint
+.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-rpc-parity verify-trade-ib-health verify-trade-celery-bars verify-trade-celery-massive-loop-stg verify-trade-ib-ui verify-trade-ib-migration-program verify-trade-ib-migration-program-dev sync-redis-ib-dev-compose-config rollout-tibm-w1-stg verify-trade-ib-w1-stg rollout-tibm-w2-stg verify-trade-ib-w2-stg rollout-tibm-w3-stg verify-trade-ib-w3-stg verify-trade-ib-rollout-stg rollout-tibm-dev-compose verify-trade-ib-rollout-dev-compose rollout-tibm-prod verify-trade-ib-w1-prod verify-trade-ib-w2-prod verify-trade-ib-w3-prod verify-trade-ib-rollout-prod rollout-tibm-strategy verify-tibm-strategy-alignment ib-gateway-set-live verify-ib-gateway-program verify-trade-cutover verify-trade-quotes-e2e sync-redis-ib-secrets test lint
 
 KUBECONFIG ?= $(HOME)/.kube/bifrost-k3s.yaml
 export KUBECONFIG
@@ -37,6 +37,10 @@ verify-trade-ib-health:
 verify-trade-celery-bars:
 	chmod +x scripts/verify-trade-celery-bars.sh
 	./scripts/verify-trade-celery-bars.sh
+
+verify-trade-celery-massive-loop-stg:
+	chmod +x scripts/verify-trade-celery-massive-loop-stg.sh
+	./scripts/verify-trade-celery-massive-loop-stg.sh
 
 verify-trade-ib-ui:
 	chmod +x scripts/verify-trade-ib-ui.sh
