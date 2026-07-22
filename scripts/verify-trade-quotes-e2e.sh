@@ -6,10 +6,20 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 TRADE_NS="${TRADE_NS:-bifrost-stg}"
-GATEWAY_HOST="${STG_GATEWAY_HOST:-trade-stg.bifrost.lan}"
-GATEWAY_IP="${STG_GATEWAY_IP:-192.168.10.73}"
+# Prefer Traefik NodePort escape hatch (same as verify-trade-ib-w3-stg) — no Host header.
+# VIP alt: STG_TRADE_BASE_URL=https://192.168.10.100 STG_TRADE_HOST=stg.trader.bifrost.lan
+STG_BASE_URL="${STG_TRADE_BASE_URL:-http://192.168.10.73:30880}"
+STG_HOST="${STG_TRADE_HOST:-}"
 PROBE_SYMBOL="${PROBE_SYMBOL:-NVDA}"
 TICK_KEY="${PROBE_SYMBOL}|STK|||"
+
+stg_curl() {
+  if [[ -n "${STG_HOST}" ]]; then
+    curl -sf -H "Host: ${STG_HOST}" "$@"
+  else
+    curl -sf "$@"
+  fi
+}
 
 export KUBECONFIG
 
@@ -60,8 +70,7 @@ print(pkg_resources.get_distribution('bifrost-core').version)
 " 2>/dev/null || echo "unknown")
 echo "  api-market bifrost-core=${CORE_VER}"
 
-HTTP_BODY=$(curl -sf -H "Host: ${GATEWAY_HOST}" \
-  "http://${GATEWAY_IP}/api/market/quotes?symbols=${PROBE_SYMBOL}" 2>/dev/null || echo '{}')
+HTTP_BODY=$(stg_curl "${STG_BASE_URL}/api/market/quotes?symbols=${PROBE_SYMBOL}" 2>/dev/null || echo '{}')
 QUOTE_COUNT=$(echo "$HTTP_BODY" | python3 -c "
 import json, sys
 d = json.load(sys.stdin)

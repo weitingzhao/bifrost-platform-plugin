@@ -7,9 +7,19 @@ ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
 NS="${STG_NAMESPACE:-bifrost-stg}"
-STG_HOST="${STG_TRADE_HOST:-trade-stg.bifrost.lan}"
-STG_IP="${STG_TRADE_IP:-192.168.10.73}"
+# Traefik NodePort escape hatch (trade-gateway-ip :30880) — no Host header.
+# VIP alt: STG_TRADE_BASE_URL=https://192.168.10.100 STG_TRADE_HOST=stg.trader.bifrost.lan
+STG_BASE_URL="${STG_TRADE_BASE_URL:-http://192.168.10.73:30880}"
+STG_HOST="${STG_TRADE_HOST:-}"
 GW_URL="redis://ib-gateway:${REDIS_IB_GATEWAY_PASS:-}@127.0.0.1:6379"
+
+stg_curl() {
+  if [[ -n "${STG_HOST}" ]]; then
+    curl -sf -H "Host: ${STG_HOST}" "$@"
+  else
+    curl -sf "$@"
+  fi
+}
 
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
@@ -42,7 +52,8 @@ print('  platform_ib_gateway module OK')
 "
 
 echo "== [4/6] Monitor /status — socket.platform_ib_gateway =="
-status_json=$(curl -sf -H "Host: ${STG_HOST}" "http://${STG_IP}/api/monitor/status")
+echo "  via ${STG_BASE_URL}/api/monitor/status"
+status_json=$(stg_curl "${STG_BASE_URL}/api/monitor/status")
 if ! python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert d.get('socket',{}).get('platform_ib_gateway') is not None" "$status_json"; then
   echo "ERROR: socket.platform_ib_gateway missing in Monitor /status" >&2
   echo "$status_json" | python3 -m json.tool | head -40 >&2 || true
@@ -51,7 +62,7 @@ fi
 echo "  platform_ib_gateway present in /status"
 
 echo "== [5/6] Ops market-ingest — platform_gateway_managed field =="
-ops_json=$(curl -sf -H "Host: ${STG_HOST}" "http://${STG_IP}/api/ops/market-ingest/services" 2>/dev/null || true)
+ops_json=$(stg_curl "${STG_BASE_URL}/api/ops/market-ingest/services" 2>/dev/null || true)
 if [[ -n "$ops_json" ]]; then
   python3 -c "
 import json, sys

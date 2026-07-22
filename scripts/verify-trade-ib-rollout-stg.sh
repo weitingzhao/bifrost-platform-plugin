@@ -57,9 +57,13 @@ strategy_core=$(kubectl exec -n "${NS}" deploy/api-strategy -- python -c \
 echo "  api-strategy bifrost-core=${strategy_core} (out of W1–W3 scope — not a rollout gate)"
 
 echo "== [5/5] Monitor platform_ib_gateway still present =="
-STG_HOST="${STG_TRADE_HOST:-trade-stg.bifrost.lan}"
-STG_IP="${STG_TRADE_IP:-192.168.10.73}"
-status_json=$(curl -sf -H "Host: ${STG_HOST}" "http://${STG_IP}/api/monitor/status")
+STG_BASE_URL="${STG_TRADE_BASE_URL:-http://192.168.10.73:30880}"
+STG_HOST="${STG_TRADE_HOST:-}"
+if [[ -n "${STG_HOST}" ]]; then
+  status_json=$(curl -sf -H "Host: ${STG_HOST}" "${STG_BASE_URL}/api/monitor/status")
+else
+  status_json=$(curl -sf "${STG_BASE_URL}/api/monitor/status")
+fi
 python3 -c "
 import json, sys
 d = json.loads(sys.argv[1])

@@ -6,9 +6,19 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
 NS="${STG_NAMESPACE:-bifrost-stg}"
-STG_HOST="${STG_TRADE_HOST:-trade-stg.bifrost.lan}"
-STG_IP="${STG_TRADE_IP:-192.168.10.73}"
+# Traefik NodePort escape hatch (trade-gateway-ip :30880) — no Host header.
+# VIP alt: STG_TRADE_BASE_URL=https://192.168.10.100 STG_TRADE_HOST=stg.trader.bifrost.lan
+STG_BASE_URL="${STG_TRADE_BASE_URL:-http://192.168.10.73:30880}"
+STG_HOST="${STG_TRADE_HOST:-}"
 MIN_CORE_VERSION="${TIBM_W3_MIN_CORE_VERSION:-0.2.10}"
+
+stg_curl() {
+  if [[ -n "${STG_HOST}" ]]; then
+    curl -sf -H "Host: ${STG_HOST}" "$@"
+  else
+    curl -sf "$@"
+  fi
+}
 
 W3_DEPLOYMENTS=(
   api-market
@@ -62,7 +72,7 @@ for path in \
   "/api/portfolio/health" \
   "/api/docs/health" \
   "/api/trading/health"; do
-  code=$(curl -sf -o /dev/null -w "%{http_code}" -H "Host: ${STG_HOST}" "http://${STG_IP}${path}" || echo "000")
+  code=$(stg_curl -o /dev/null -w "%{http_code}" "${STG_BASE_URL}${path}" || echo "000")
   if [[ "$code" != "200" ]]; then
     echo "ERROR: ${path} HTTP ${code} (expected 200)" >&2
     exit 1
@@ -71,8 +81,8 @@ for path in \
 done
 
 echo "== [5/6] Trading read-only smoke (GET /executions/freshness) =="
-fresh_code=$(curl -sf -o /dev/null -w "%{http_code}" -H "Host: ${STG_HOST}" \
-  "http://${STG_IP}/api/trading/executions/freshness" || echo "000")
+fresh_code=$(stg_curl -o /dev/null -w "%{http_code}" \
+  "${STG_BASE_URL}/api/trading/executions/freshness" || echo "000")
 if [[ "$fresh_code" != "200" ]]; then
   echo "ERROR: /api/trading/executions/freshness HTTP ${fresh_code}" >&2
   exit 1
@@ -80,7 +90,7 @@ fi
 echo "  /api/trading/executions/freshness HTTP 200"
 
 echo "== [6/6] Market quotes smoke (redis-ib + GET /quotes) =="
-quotes_json=$(curl -sf -H "Host: ${STG_HOST}" "http://${STG_IP}/api/market/quotes?symbols=NVDA" || true)
+quotes_json=$(stg_curl "${STG_BASE_URL}/api/market/quotes?symbols=NVDA" || true)
 if [[ -z "$quotes_json" ]]; then
   echo "ERROR: GET /api/market/quotes failed" >&2
   exit 1

@@ -6,8 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
 NS="${STG_NAMESPACE:-bifrost-stg}"
-STG_HOST="${STG_TRADE_HOST:-trade-stg.bifrost.lan}"
-STG_IP="${STG_TRADE_IP:-192.168.10.73}"
+# Traefik NodePort escape hatch (unused by W2 pod checks; kept for env parity with W1/W3).
+STG_BASE_URL="${STG_TRADE_BASE_URL:-http://192.168.10.73:30880}"
 MIN_CORE_VERSION="${TIBM_W2_MIN_CORE_VERSION:-0.2.10}"
 
 echo "== TIBM W2 STG runtime verify =="
