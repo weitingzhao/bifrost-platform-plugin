@@ -19,6 +19,9 @@ from bifrost_plugin.ib_gateway.redis_keys import (
     IB_INGESTER_SUBSCRIPTIONS_KEY,
     IB_INGESTER_TICK_PREFIX,
     IB_INGESTER_TICK_TTL_SEC,
+    IB_OPTION_CACHE_META_REFRESH_TS,
+    IB_OPTION_CACHE_PREFIX,
+    IB_OPTION_CACHE_TTL_SEC,
     IB_OPERATOR_HEALTH_KEY,
     IB_OPERATOR_RESULT_PREFIX,
     IB_OPERATOR_RESULT_TTL_SEC,
@@ -40,6 +43,19 @@ class GatewayRedisWriter:
             IB_INGESTER_CHANNEL,
             json.dumps({"contract_key": contract_key, "ts": data.get("ts")}, default=str),
         )
+
+    def write_opt_cache(self, contract_key: str, data: Dict[str, Any]) -> None:
+        """SET JSON at ``ib:option:cache:{contract_key}`` with TTL (OPT one-shot cache)."""
+        ck = (contract_key or "").strip()
+        if not ck:
+            return
+        key = IB_OPTION_CACHE_PREFIX + ck
+        self._rds.set(key, json.dumps(data, default=str), ex=IB_OPTION_CACHE_TTL_SEC)
+
+    def set_opt_cache_last_refresh_ts(self, ts: Optional[float] = None) -> None:
+        """Mark OPT cache loop completion for health/observability."""
+        value = str(float(ts if ts is not None else time.time()))
+        self._rds.set(IB_OPTION_CACHE_META_REFRESH_TS, value)
 
     def set_subscriptions(self, keys: Set[str]) -> None:
         pipe = self._rds.pipeline()

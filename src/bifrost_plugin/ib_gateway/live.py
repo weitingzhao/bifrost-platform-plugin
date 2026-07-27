@@ -14,12 +14,18 @@ from bifrost_plugin.ib_gateway.ib_ops import (
     fetch_bars_range,
     fetch_executions,
     fetch_option_expirations,
+    fetch_option_quote_one_shot,
     fetch_option_snapshot,
 )
 from bifrost_plugin.ib_gateway.on_demand import build_desired_stk_symbols, list_fresh_on_demand_stk
+from bifrost_plugin.ib_gateway.on_demand_opt import list_fresh_on_demand_opt, parse_opt_contract_key
 from bifrost_plugin.ib_gateway.protocol import CommandMessage
 from bifrost_plugin.ib_gateway.settings import GatewaySettings
-from bifrost_plugin.ib_gateway.redis_keys import stk_contract_key
+from bifrost_plugin.ib_gateway.redis_keys import (
+    IB_OPTION_ON_DEMAND_SET,
+    IB_OPTION_ON_DEMAND_TS,
+    stk_contract_key,
+)
 from bifrost_plugin.ib_gateway.writer import GatewayRedisWriter
 
 logger = logging.getLogger(__name__)
@@ -66,8 +72,9 @@ class LiveGateway:
             for sc in self._slots.values()
         ]
         market_task = asyncio.create_task(self._market_loop(stop), name="market")
+        opt_cache_task = asyncio.create_task(self._opt_cache_loop(stop), name="opt-cache")
         health_task = asyncio.create_task(self._health_loop(stop), name="health")
-        await asyncio.gather(market_task, health_task, *reconnect_tasks)
+        await asyncio.gather(market_task, opt_cache_task, health_task, *reconnect_tasks)
 
     async def handle_command(self, msg: CommandMessage) -> Dict[str, Any]:
         self._cmd_count += 1
@@ -190,6 +197,20 @@ class LiveGateway:
                 pacing_sec=pacing_sec,
             )
             return {"ok": True, "data": {"rows": rows, "underlying_price": underlying_price}}
+        if op == "refresh_option_cache":
+            host = self._host_slot()
+            if host is None:
+                return {"ok": False, "error": "host_not_connected"}
+            if not self._settings.opt_cache_enabled:
+                return {"ok": False, "error": "opt_cache_disabled"}
+            raw_keys = payload.get("contract_keys") or []
+            if not isinstance(raw_keys, list):
+                raw_keys = []
+            keys = [str(k).strip() for k in raw_keys if str(k).strip()]
+            if keys:
+                self._register_on_demand_opt(keys)
+            refreshed = await self._refresh_opt_cache_once(host)
+            return {"ok": True, "data": {"refreshed": refreshed}}
         return {"ok": False, "error": f"unsupported_op:{op}"}
 
     def _host_slot(self) -> Optional[SlotConnection]:
@@ -354,6 +375,112 @@ class LiveGateway:
                 logger.warning("reqMktData %s failed: %s", sym, e)
 
         self._writer.set_subscriptions({stk_contract_key(s) for s in desired})
+
+    def _register_on_demand_opt(self, contract_keys: List[str]) -> None:
+        """SADD + heartbeat for optional RPC-driven registration (no bifrost-core)."""
+        valid: List[str] = []
+        for raw in contract_keys:
+            parsed = parse_opt_contract_key(raw)
+            if parsed is None:
+                continue
+            sym, expiry, strike, right = parsed
+            # Preserve strike string from input when possible
+            parts = str(raw).strip().split("|")
+            strike_s = parts[3].strip() if len(parts) == 5 else str(strike)
+            valid.append(f"{sym}|OPT|{expiry}|{strike_s}|{right}")
+        if not valid:
+            return
+        rds = self._writer.redis
+        ts = str(time.time())
+        try:
+            pipe = rds.pipeline(transaction=False)
+            pipe.sadd(IB_OPTION_ON_DEMAND_SET, *valid)
+            pipe.hset(IB_OPTION_ON_DEMAND_TS, mapping={k: ts for k in valid})
+            pipe.execute()
+        except Exception as e:
+            logger.warning("register on_demand_opt failed: %s", e)
+
+    async def _refresh_opt_cache_once(self, host: SlotConnection) -> int:
+        """One-shot fetch + write for fresh on-demand OPT keys. Returns refreshed count."""
+        if host.ib is None or host.state != ConnectionState.CONNECTED:
+            return 0
+        now = time.time()
+        fresh = list_fresh_on_demand_opt(
+            self._writer.redis,
+            max_age_sec=float(self._settings.on_demand_opt_max_age_sec),
+            now=now,
+        )
+        cap = max(1, int(self._settings.opt_cache_max_contracts))
+        if len(fresh) > cap:
+            logger.warning(
+                "on-demand OPT truncated to opt_cache_max_contracts=%s (had %s)",
+                cap,
+                len(fresh),
+            )
+            fresh = fresh[:cap]
+
+        pacing = max(0.0, float(self._settings.opt_cache_pacing_sec))
+        refreshed = 0
+        for i, ck in enumerate(fresh):
+            parsed = parse_opt_contract_key(ck)
+            if parsed is None:
+                continue
+            sym, expiry, strike, right = parsed
+            try:
+                quote = await fetch_option_quote_one_shot(host.ib, sym, expiry, strike, right)
+            except Exception as e:
+                logger.debug("opt cache one_shot %s: %s", ck, e)
+                quote = None
+            if quote is None:
+                if pacing > 0 and i + 1 < len(fresh):
+                    await asyncio.sleep(pacing)
+                continue
+            ts = time.time()
+            payload = {
+                "bid": quote.get("bid"),
+                "ask": quote.get("ask"),
+                "last": quote.get("last"),
+                "mid": quote.get("mid"),
+                "contract_key": ck,
+                "symbol": sym,
+                "sec_type": "OPT",
+                "expiry": expiry,
+                "strike": strike,
+                "option_right": right,
+                "updated_ts": ts,
+                "ts": ts,
+            }
+            try:
+                self._writer.write_opt_cache(ck, payload)
+                refreshed += 1
+                host.note_message()
+            except Exception as e:
+                logger.warning("write_opt_cache %s failed: %s", ck, e)
+            if pacing > 0 and i + 1 < len(fresh):
+                await asyncio.sleep(pacing)
+
+        try:
+            self._writer.set_opt_cache_last_refresh_ts(time.time())
+        except Exception as e:
+            logger.debug("set_opt_cache_last_refresh_ts failed: %s", e)
+        return refreshed
+
+    async def _opt_cache_loop(self, stop: asyncio.Event) -> None:
+        """Periodic one-shot OPT quote refresh for on-demand contract keys (non-blocking vs STK)."""
+        while not stop.is_set():
+            if not self._settings.opt_cache_enabled:
+                await asyncio.sleep(5)
+                continue
+            host = self._host_slot()
+            if host is None:
+                await asyncio.sleep(2)
+                continue
+            try:
+                await self._refresh_opt_cache_once(host)
+            except Exception as e:
+                logger.warning("opt_cache_loop cycle failed: %s", e)
+            sleep_sec = max(1.0, float(self._settings.opt_cache_refresh_sec))
+            await asyncio.sleep(sleep_sec)
 
     async def _health_loop(self, stop: asyncio.Event) -> None:
         verify_every = 3  # every ~30s (loop sleeps 10s)

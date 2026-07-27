@@ -17,6 +17,16 @@ Trade **Market API** `GET /quotes?symbols=…` registers STK symbols on redis-ib
 
 **IB Gateway** Host slot merges `watchlist_symbols ∪ fresh(on_demand)` into `reqMktData` (cap `max_stream_stk`, default 40). Stale heartbeats (>120s) are pruned. D10-safe — market data only, no order placement.
 
+### On-demand OPT cache (Market Live)
+
+Trade **Market API** `GET /quotes?contract_keys=…` registers OPT contract keys on redis-ib:
+
+- `SADD ib:option:control:on_demand_opt`
+- `HSET ib:option:control:on_demand_opt_ts` (heartbeat)
+- Gateway writes `ib:option:cache:{contract_key}` (JSON, TTL 300s)
+
+**IB Gateway** Host `_opt_cache_loop` one-shot `fetch_option_quote` for fresh keys (cap `opt_cache_max_contracts`, default 40; refresh ~30s). Not a continuous OPT stream. Optional RPC `refresh_option_cache`. D10-safe — market data only.
+
 ## Phase 0 — redis-ib infrastructure
 
 Delivers shared IB data Redis in `data` NS:

@@ -39,6 +39,21 @@ class GatewaySettings:
     on_demand_max_age_sec: float = 120.0
     max_stream_stk: int = 40
     on_demand_reconcile_sec: float = 5.0
+    # OPT on-demand cache (one-shot inquiry loop — not continuous stream)
+    opt_cache_enabled: bool = True
+    opt_cache_refresh_sec: float = 30.0
+    opt_cache_pacing_sec: float = 0.5
+    opt_cache_max_contracts: int = 40
+    on_demand_opt_max_age_sec: float = 180.0
+
+
+def _env_bool(env_key: str, default: Any) -> bool:
+    raw = os.environ.get(env_key)
+    if raw is None or str(raw).strip() == "":
+        if isinstance(default, bool):
+            return default
+        return str(default).strip().lower() in ("1", "true", "yes", "on")
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
 def _resolve_redis_port(redis_raw: Dict[str, Any]) -> int:
@@ -89,6 +104,26 @@ def load_settings(path: str | None = None) -> GatewaySettings:
         on_demand_max_age_sec=float(raw.get("on_demand_max_age_sec", 120)),
         max_stream_stk=int(raw.get("max_stream_stk", 40)),
         on_demand_reconcile_sec=float(raw.get("on_demand_reconcile_sec", 5)),
+        opt_cache_enabled=_env_bool(
+            "IB_GATEWAY_OPT_CACHE_ENABLED",
+            raw.get("opt_cache_enabled", True),
+        ),
+        opt_cache_refresh_sec=float(
+            os.environ.get("IB_GATEWAY_OPT_CACHE_REFRESH_SEC")
+            or raw.get("opt_cache_refresh_sec", 30)
+        ),
+        opt_cache_pacing_sec=float(
+            os.environ.get("IB_GATEWAY_OPT_CACHE_PACING_SEC")
+            or raw.get("opt_cache_pacing_sec", 0.5)
+        ),
+        opt_cache_max_contracts=int(
+            os.environ.get("IB_GATEWAY_OPT_CACHE_MAX_CONTRACTS")
+            or raw.get("opt_cache_max_contracts", 40)
+        ),
+        on_demand_opt_max_age_sec=float(
+            os.environ.get("IB_GATEWAY_ON_DEMAND_OPT_MAX_AGE_SEC")
+            or raw.get("on_demand_opt_max_age_sec", 180)
+        ),
     )
 
     wl = raw.get("watchlist_symbols") or os.environ.get("IB_GATEWAY_WATCHLIST", "")

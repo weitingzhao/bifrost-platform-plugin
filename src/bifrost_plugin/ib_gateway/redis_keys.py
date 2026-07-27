@@ -9,6 +9,14 @@ IB_INGESTER_ON_DEMAND_STK = "ib:ingester:control:on_demand_stk"
 IB_INGESTER_ON_DEMAND_STK_TS = "ib:ingester:control:on_demand_stk_ts"
 ON_DEMAND_STK_DEFAULT_MAX_AGE_SEC = 120
 
+# OPT on-demand cache (one-shot inquiry — not continuous stream). Must match bifrost-core.
+IB_OPTION_CACHE_PREFIX = "ib:option:cache:"
+IB_OPTION_CACHE_TTL_SEC = 300
+IB_OPTION_ON_DEMAND_SET = "ib:option:control:on_demand_opt"
+IB_OPTION_ON_DEMAND_TS = "ib:option:control:on_demand_opt_ts"
+IB_OPTION_CACHE_META_REFRESH_TS = "ib:option:cache:meta:last_refresh_ts"
+ON_DEMAND_OPT_DEFAULT_MAX_AGE_SEC = 180
+
 IB_ACCOUNT_AGENT_HEALTH_KEY = "bifrost:health:ws_ib_account_agent"
 IB_ACCOUNT_SNAPSHOT_KEY = "ib:account:snapshot:v1"
 IB_ACCOUNT_NOTIFY_CHANNEL = "ib:account:notify"
@@ -37,3 +45,7 @@ def stk_contract_key(symbol: str) -> str:
 
 def ingester_tick_key(contract_key: str) -> str:
     return IB_INGESTER_TICK_PREFIX + contract_key
+
+
+def option_cache_key(contract_key: str) -> str:
+    return IB_OPTION_CACHE_PREFIX + contract_key

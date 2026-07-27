@@ -9,6 +9,7 @@ import time
 from typing import Any, Dict, List
 
 from bifrost_plugin.ib_gateway.on_demand import build_desired_stk_symbols, list_fresh_on_demand_stk
+from bifrost_plugin.ib_gateway.on_demand_opt import list_fresh_on_demand_opt, parse_opt_contract_key
 from bifrost_plugin.ib_gateway.protocol import CommandMessage
 from bifrost_plugin.ib_gateway.settings import GatewaySettings
 from bifrost_plugin.ib_gateway.redis_keys import stk_contract_key
@@ -35,6 +36,7 @@ class MockGateway:
     async def run(self, stop: asyncio.Event) -> None:
         tasks = [
             asyncio.create_task(self._tick_loop(stop)),
+            asyncio.create_task(self._opt_cache_loop(stop)),
             asyncio.create_task(self._health_loop(stop)),
         ]
         await asyncio.gather(*tasks)
@@ -154,6 +156,11 @@ class MockGateway:
                     ],
                 },
             }
+        if msg.op == "refresh_option_cache":
+            if not self._settings.opt_cache_enabled:
+                return {"ok": False, "error": "opt_cache_disabled"}
+            refreshed = await self._refresh_opt_cache_once()
+            return {"ok": True, "data": {"refreshed": refreshed}}
         return {"ok": False, "error": f"mock_unsupported_op:{msg.op}"}
 
     def _mock_accounts(self) -> List[Dict[str, Any]]:
@@ -204,6 +211,65 @@ class MockGateway:
                 }
             )
             await asyncio.sleep(5)
+
+    async def _refresh_opt_cache_once(self) -> int:
+        if not self._settings.opt_cache_enabled:
+            return 0
+        now = time.time()
+        fresh = list_fresh_on_demand_opt(
+            self._writer.redis,
+            max_age_sec=float(self._settings.on_demand_opt_max_age_sec),
+            now=now,
+        )
+        cap = max(1, int(self._settings.opt_cache_max_contracts))
+        if len(fresh) > cap:
+            logger.warning(
+                "mock on-demand OPT truncated to opt_cache_max_contracts=%s (had %s)",
+                cap,
+                len(fresh),
+            )
+            fresh = fresh[:cap]
+        refreshed = 0
+        for ck in fresh:
+            parsed = parse_opt_contract_key(ck)
+            if parsed is None:
+                continue
+            sym, expiry, strike, right = parsed
+            und = self._prices.get(sym, 100.0)
+            # Rough mock premium from distance-to-strike
+            intrinsic = max(0.0, und - strike) if right == "C" else max(0.0, strike - und)
+            mid = round(max(0.05, intrinsic + random.uniform(0.5, 2.5)), 2)
+            spread = 0.05
+            ts = time.time()
+            payload = {
+                "bid": round(mid - spread, 2),
+                "ask": round(mid + spread, 2),
+                "last": mid,
+                "mid": mid,
+                "contract_key": ck,
+                "symbol": sym,
+                "sec_type": "OPT",
+                "expiry": expiry,
+                "strike": strike,
+                "option_right": right,
+                "updated_ts": ts,
+                "ts": ts,
+            }
+            self._writer.write_opt_cache(ck, payload)
+            refreshed += 1
+        self._writer.set_opt_cache_last_refresh_ts(time.time())
+        return refreshed
+
+    async def _opt_cache_loop(self, stop: asyncio.Event) -> None:
+        while not stop.is_set():
+            if not self._settings.opt_cache_enabled:
+                await asyncio.sleep(5)
+                continue
+            try:
+                await self._refresh_opt_cache_once()
+            except Exception as e:
+                logger.warning("mock opt_cache_loop failed: %s", e)
+            await asyncio.sleep(max(1.0, float(self._settings.opt_cache_refresh_sec)))
 
     async def _health_loop(self, stop: asyncio.Event) -> None:
         while not stop.is_set():
