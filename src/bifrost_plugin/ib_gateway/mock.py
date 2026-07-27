@@ -8,7 +8,8 @@ import random
 import time
 from typing import Any, Dict, List
 
-from bifrost_plugin.ib_gateway.protocol import CommandMessage, dumps_result
+from bifrost_plugin.ib_gateway.on_demand import build_desired_stk_symbols, list_fresh_on_demand_stk
+from bifrost_plugin.ib_gateway.protocol import CommandMessage
 from bifrost_plugin.ib_gateway.settings import GatewaySettings
 from bifrost_plugin.ib_gateway.redis_keys import stk_contract_key
 from bifrost_plugin.ib_gateway.writer import GatewayRedisWriter
@@ -164,8 +165,16 @@ class MockGateway:
         return rows
 
     async def _tick_loop(self, stop: asyncio.Event) -> None:
-        symbols = list(self._settings.watchlist_symbols) or list(self._prices.keys())
         while not stop.is_set():
+            on_demand = list_fresh_on_demand_stk(
+                self._writer.redis,
+                max_age_sec=float(self._settings.on_demand_max_age_sec),
+            )
+            symbols, _truncated = build_desired_stk_symbols(
+                self._settings.watchlist_symbols or list(self._prices.keys()),
+                on_demand,
+                max_stream_stk=int(self._settings.max_stream_stk),
+            )
             for sym in symbols:
                 base = self._prices.get(sym, 100.0)
                 base *= 1 + random.uniform(-0.002, 0.002)

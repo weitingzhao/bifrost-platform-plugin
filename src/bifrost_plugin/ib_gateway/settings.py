@@ -35,6 +35,10 @@ class GatewaySettings:
     probe_interval_sec: float = 60.0
     health_ttl_sec: int = 30
     env_label: str = "platform"
+    # On-demand STK (Market Live) — Host MD reconcile
+    on_demand_max_age_sec: float = 120.0
+    max_stream_stk: int = 40
+    on_demand_reconcile_sec: float = 5.0
 
 
 def _resolve_redis_port(redis_raw: Dict[str, Any]) -> int:
@@ -82,6 +86,9 @@ def load_settings(path: str | None = None) -> GatewaySettings:
         probe_interval_sec=float(raw.get("probe_interval_sec", 60)),
         health_ttl_sec=int(raw.get("health_ttl_sec", 30)),
         env_label=os.environ.get("IB_GATEWAY_ENV", raw.get("env", "platform")),
+        on_demand_max_age_sec=float(raw.get("on_demand_max_age_sec", 120)),
+        max_stream_stk=int(raw.get("max_stream_stk", 40)),
+        on_demand_reconcile_sec=float(raw.get("on_demand_reconcile_sec", 5)),
     )
 
     wl = raw.get("watchlist_symbols") or os.environ.get("IB_GATEWAY_WATCHLIST", "")

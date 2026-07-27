@@ -16,8 +16,9 @@ from bifrost_plugin.ib_gateway.ib_ops import (
     fetch_option_expirations,
     fetch_option_snapshot,
 )
+from bifrost_plugin.ib_gateway.on_demand import build_desired_stk_symbols, list_fresh_on_demand_stk
 from bifrost_plugin.ib_gateway.protocol import CommandMessage
-from bifrost_plugin.ib_gateway.settings import GatewaySettings, TwsSlotConfig
+from bifrost_plugin.ib_gateway.settings import GatewaySettings
 from bifrost_plugin.ib_gateway.redis_keys import stk_contract_key
 from bifrost_plugin.ib_gateway.writer import GatewayRedisWriter
 
@@ -42,7 +43,8 @@ class LiveGateway:
             s.slot: SlotConnection(s) for s in settings.slots
         }
         self._cmd_count = 0
-        self._tickers: List[Any] = []
+        self._tickers: Dict[str, Any] = {}
+        self._last_reconcile_at = 0.0
 
     def slot_for_payload(self, payload: Dict[str, Any]) -> Optional[SlotConnection]:
         slot_name = (payload.get("account_slot") or "primary").strip().lower()
@@ -51,7 +53,7 @@ class LiveGateway:
         return self._slots.get("host")
 
     async def run(self, stop: asyncio.Event) -> None:
-        from ib_insync import IB, Stock  # noqa: PLC0415
+        from ib_insync import IB  # noqa: PLC0415
 
         def _factory() -> IB:
             return IB()
@@ -284,16 +286,9 @@ class LiveGateway:
                 await asyncio.sleep(2)
                 continue
 
-            if not self._tickers:
-                for sym in self._settings.watchlist_symbols:
-                    contract = Stock(sym, "SMART", "USD")
-                    ticker = host.ib.reqMktData(contract, "", False, False)
-                    self._tickers.append((sym, ticker))
-                self._writer.set_subscriptions(
-                    {stk_contract_key(sym) for sym in self._settings.watchlist_symbols}
-                )
+            self._reconcile_host_market_data(host, Stock)
 
-            for sym, ticker in self._tickers:
+            for sym, ticker in list(self._tickers.items()):
                 contract_key = stk_contract_key(sym)
                 payload = {
                     "bid": _float_or_none(ticker.bid),
@@ -309,6 +304,56 @@ class LiveGateway:
                 host.note_message()
 
             await asyncio.sleep(2)
+
+    def _reconcile_host_market_data(self, host: SlotConnection, Stock: Any) -> None:
+        """Diff watchlist ∪ fresh on-demand vs active Host reqMktData streams."""
+        now = time.time()
+        if (
+            self._tickers
+            and (now - self._last_reconcile_at) < float(self._settings.on_demand_reconcile_sec)
+        ):
+            return
+        self._last_reconcile_at = now
+
+        on_demand = list_fresh_on_demand_stk(
+            self._writer.redis,
+            max_age_sec=float(self._settings.on_demand_max_age_sec),
+            now=now,
+        )
+        desired, truncated = build_desired_stk_symbols(
+            self._settings.watchlist_symbols,
+            on_demand,
+            max_stream_stk=int(self._settings.max_stream_stk),
+        )
+        if truncated:
+            logger.warning(
+                "on-demand STK truncated to max_stream_stk=%s (watchlist preferred)",
+                self._settings.max_stream_stk,
+            )
+
+        desired_set = set(desired)
+        active = set(self._tickers.keys())
+
+        for sym in active - desired_set:
+            ticker = self._tickers.pop(sym, None)
+            if ticker is None or host.ib is None:
+                continue
+            try:
+                host.ib.cancelMktData(ticker.contract)
+            except Exception as e:
+                logger.debug("cancelMktData %s: %s", sym, e)
+
+        for sym in desired:
+            if sym in self._tickers or host.ib is None:
+                continue
+            try:
+                contract = Stock(sym, "SMART", "USD")
+                ticker = host.ib.reqMktData(contract, "", False, False)
+                self._tickers[sym] = ticker
+            except Exception as e:
+                logger.warning("reqMktData %s failed: %s", sym, e)
+
+        self._writer.set_subscriptions({stk_contract_key(s) for s in desired})
 
     async def _health_loop(self, stop: asyncio.Event) -> None:
         verify_every = 3  # every ~30s (loop sleeps 10s)

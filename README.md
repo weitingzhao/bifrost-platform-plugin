@@ -8,6 +8,15 @@ Bifrost Ops Platform **plugins** — domain-specific extensions that run alongsi
 |--------|--------|-------------|
 | **IB Gateway** | Complete (IBGP0–4) | Shared TWS connectivity bus → `redis-ib` for all Trade environments · live TWS @ .30/.32 |
 
+### On-demand STK (Market Live)
+
+Trade **Market API** `GET /quotes?symbols=…` registers STK symbols on redis-ib:
+
+- `SADD ib:ingester:control:on_demand_stk`
+- `HSET ib:ingester:control:on_demand_stk_ts` (heartbeat)
+
+**IB Gateway** Host slot merges `watchlist_symbols ∪ fresh(on_demand)` into `reqMktData` (cap `max_stream_stk`, default 40). Stale heartbeats (>120s) are pruned. D10-safe — market data only, no order placement.
+
 ## Phase 0 — redis-ib infrastructure
 
 Delivers shared IB data Redis in `data` NS:

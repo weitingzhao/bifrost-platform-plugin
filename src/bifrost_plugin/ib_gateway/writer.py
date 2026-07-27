@@ -48,6 +48,11 @@ class GatewayRedisWriter:
             pipe.sadd(IB_INGESTER_SUBSCRIPTIONS_KEY, *sorted(keys))
         pipe.execute()
 
+    @property
+    def redis(self) -> Any:
+        """Raw redis-ib client (on-demand control reads)."""
+        return self._rds
+
     def write_ingestor_health(self, fields: Dict[str, Any]) -> None:
         self._write_hash(IB_INGESTER_HEALTH_KEY, {"env": self._env, "plugin": "ib-gateway", **fields})
 
