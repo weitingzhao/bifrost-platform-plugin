@@ -14,6 +14,8 @@ Delivers shared IB data Redis in `data` NS:
 
 - `redis-ib` Deployment (no persistence — all keys rebuild from TWS)
 - ACL users: `ib-gateway`, `trade-prod`, `trade-dev`, `platform`
+- Key patterns include `bifrost:health:daemon_*` (Trade account-sync / daemon health HSET)
+- `trade-dev` is **read-only observe**; K8s Dev Trade workloads that consume streams (account-sync) must use `trade-prod`
 - NetworkPolicy: ingress from Trade + Platform NS only
 - ExternalName aliases in `bifrost-{dev,stg,prod}`
 

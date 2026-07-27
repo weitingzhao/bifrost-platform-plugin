@@ -1,5 +1,7 @@
 user default off
-user ib-gateway on >GATEWAY_PASS ~ib:* ~bifrost:health:ws_ib_* allchannels +@all
-user trade-prod on >TRADE_PROD_PASS ~ib:* ~bifrost:health:ws_ib_* allchannels +@all
-user trade-dev on >TRADE_DEV_PASS ~ib:tick:* ~ib:ingester:* ~ib:account:* ~ib:health:* ~bifrost:health:ws_ib_* allchannels +@read +ping +info +client|list
-user platform on >PLATFORM_PASS ~ib:health:* ~ib:events:* ~ib:control:* ~ib:tick:* ~ib:ingester:* ~ib:account:* ~bifrost:health:ws_ib_* allchannels +@all
+# Gateway + trade-prod: full IB bus write. Include daemon_* health so Trade account-sync / daemon can HSET.
+user ib-gateway on >GATEWAY_PASS ~ib:* ~bifrost:health:ws_ib_* ~bifrost:health:daemon_* ~bifrost:health:account_sync_daemon allchannels +@all
+user trade-prod on >TRADE_PROD_PASS ~ib:* ~bifrost:health:ws_ib_* ~bifrost:health:daemon_* ~bifrost:health:account_sync_daemon allchannels +@all
+# trade-dev: read-only observe (ticks/account snapshots/gateway health). K8s Dev account-sync must use trade-prod.
+user trade-dev on >TRADE_DEV_PASS ~ib:tick:* ~ib:ingester:* ~ib:account:* ~ib:health:* ~bifrost:health:ws_ib_* ~bifrost:health:daemon_* ~bifrost:health:account_sync_daemon allchannels +@read +ping +info +client|list
+user platform on >PLATFORM_PASS ~ib:health:* ~ib:events:* ~ib:control:* ~ib:tick:* ~ib:ingester:* ~ib:account:* ~bifrost:health:ws_ib_* ~bifrost:health:daemon_* ~bifrost:health:account_sync_daemon allchannels +@all
