@@ -274,6 +274,11 @@ class MockGateway:
     async def _health_loop(self, stop: asyncio.Event) -> None:
         while not stop.is_set():
             now = time.time()
+            secondary = next(
+                (slot for slot in self._settings.slots if slot.slot == "secondary"),
+                None,
+            )
+            secondary_present = secondary is not None
             common = {
                 "connected": True,
                 "mode": "mock",
@@ -288,10 +293,22 @@ class MockGateway:
                     **common,
                     "host_connected": True,
                     "host_client_id": _MOCK_CLIENT_ID,
-                    "secondary_connected": len(self._settings.slots) > 1,
+                    "secondary_present": secondary_present,
+                    "secondary_connected": secondary_present,
+                    "secondary_client_id": _MOCK_CLIENT_ID if secondary_present else 0,
                 }
             )
-            self._writer.write_operator_health({**common, "cmd_count": self._cmd_count})
+            self._writer.write_operator_health(
+                {
+                    **common,
+                    "cmd_count": self._cmd_count,
+                    "host_connected": True,
+                    "host_client_id": _MOCK_CLIENT_ID,
+                    "secondary_present": secondary_present,
+                    "secondary_connected": secondary_present,
+                    "secondary_client_id": _MOCK_CLIENT_ID if secondary_present else 0,
+                }
+            )
             for slot in self._settings.slots:
                 self._writer.write_plugin_health(slot.account_id, "connected", {"mode": "mock", "slot": slot.slot})
             await asyncio.sleep(10)

@@ -240,6 +240,7 @@ class LiveGateway:
             "cmd_count": self._cmd_count,
             "host_connected": host is not None and host.state == ConnectionState.CONNECTED,
             "secondary_connected": sec is not None and sec.state == ConnectionState.CONNECTED,
+            "secondary_present": sec is not None,
             "host_client_id": host.client_id if host else None,
             "secondary_client_id": sec.client_id if sec else None,
         }
@@ -516,6 +517,7 @@ class LiveGateway:
                     "host_connected": host_ok,
                     "host_client_id": host.client_id if host else 0,
                     "secondary_connected": sec_ok,
+                    "secondary_present": sec is not None,
                     "secondary_client_id": sec.client_id if sec else 0,
                     "last_msg_ts": last_any,
                     "mode": "live",
