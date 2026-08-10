@@ -4,9 +4,15 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT/.env}"
-KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
-export KUBECONFIG
+DEFAULT_KUBECONFIG="$HOME/.kube/bifrost-k3s.yaml"
 source "$ENV_FILE"
+# Resolve KUBECONFIG — tilde paths and empty values must not fall back to localhost:8080.
+if [[ -z "${KUBECONFIG:-}" || ! -f "${KUBECONFIG/#\~/$HOME}" ]]; then
+  KUBECONFIG="$DEFAULT_KUBECONFIG"
+else
+  KUBECONFIG="${KUBECONFIG/#\~/$HOME}"
+fi
+export KUBECONFIG
 
 GW_URL="redis://ib-gateway:${REDIS_IB_GATEWAY_PASS}@127.0.0.1:6379"
 
