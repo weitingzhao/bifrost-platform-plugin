@@ -14,7 +14,6 @@ API_DF="${STOCKS}/bifrost-trade-infra/k8s/cicd/docker/Dockerfile.api-stg"
 
 W3_API_IMAGES=(
   bifrost-api-market
-  bifrost-api-massive
   bifrost-api-research
   bifrost-api-portfolio
   bifrost-api-docs
@@ -23,7 +22,6 @@ W3_API_IMAGES=(
 
 W3_DEPLOYMENTS=(
   api-market
-  api-massive
   api-research
   api-portfolio
   api-docs

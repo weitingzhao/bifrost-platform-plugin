@@ -27,7 +27,7 @@ echo "== [3/6] Prod rolled workloads — bifrost-core >= ${MIN_CORE} =="
 ROLLED_PYTHON_DEPLOYMENTS=(
   api-monitor api-ops
   celery-worker
-  api-market api-massive api-research api-portfolio api-docs api-trading
+  api-market api-research api-portfolio api-docs api-trading
 )
 for dep in "${ROLLED_PYTHON_DEPLOYMENTS[@]}"; do
   kubectl exec -n "${NS}" "deploy/${dep}" -- python -c "

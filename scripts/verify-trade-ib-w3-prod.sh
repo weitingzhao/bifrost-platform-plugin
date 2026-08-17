@@ -14,7 +14,6 @@ MIN_CORE_VERSION="${TIBM_W3_MIN_CORE_VERSION:-0.2.10}"
 
 W3_DEPLOYMENTS=(
   api-market
-  api-massive
   api-research
   api-portfolio
   api-docs
@@ -59,7 +58,6 @@ done
 echo "== [4/6] Ingress GET /health — all W3 domains =="
 for path in \
   "/api/market/health" \
-  "/api/massive/health" \
   "/api/research/health" \
   "/api/portfolio/health" \
   "/api/docs/health" \
