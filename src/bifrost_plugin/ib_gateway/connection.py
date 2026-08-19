@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import enum
 import logging
+import re
 import time
 from typing import Any, Callable, Optional
 
@@ -12,8 +13,11 @@ from bifrost_plugin.ib_gateway.settings import TwsSlotConfig
 
 logger = logging.getLogger(__name__)
 
+_IB_ACCOUNT_ID_RE = re.compile(r"^[A-Z]{1,2}\d+$")
+
 
 def _managed_accounts(ib: Any) -> list[str]:
+    """Return IB account IDs, filtering out TWS login usernames."""
     try:
         raw = ib.managedAccounts()
     except Exception:
@@ -24,7 +28,16 @@ def _managed_accounts(ib: Any) -> list[str]:
         parts = raw.split(",")
     else:
         parts = [str(s) for s in raw]
-    return [s.strip() for s in parts if s.strip()]
+    out = []
+    for s in parts:
+        s = s.strip()
+        if not s:
+            continue
+        if not _IB_ACCOUNT_ID_RE.match(s):
+            logger.info("Filtered non-account ID from managedAccounts: %r", s)
+            continue
+        out.append(s)
+    return out
 
 
 class ConnectionState(enum.Enum):

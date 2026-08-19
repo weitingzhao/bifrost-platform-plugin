@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -140,7 +141,11 @@ async def fetch_bars_range(
     return all_out
 
 
+_IB_ACCOUNT_ID_RE = re.compile(r"^[A-Z]{1,2}\d+$")
+
+
 def _managed_account_ids(ib: Any) -> List[str]:
+    """Return IB account IDs, filtering out TWS login usernames."""
     try:
         raw = ib.managedAccounts()
     except Exception as e:
@@ -152,7 +157,16 @@ def _managed_account_ids(ib: Any) -> List[str]:
         parts = raw.split(",")
     else:
         parts = [str(s) for s in raw]
-    return [s.strip() for s in parts if s.strip()]
+    out = []
+    for s in parts:
+        s = s.strip()
+        if not s:
+            continue
+        if not _IB_ACCOUNT_ID_RE.match(s):
+            logger.info("Filtered non-account ID from managedAccounts: %r", s)
+            continue
+        out.append(s)
+    return out
 
 
 def position_to_dict(pos: Any) -> Dict[str, Any]:
