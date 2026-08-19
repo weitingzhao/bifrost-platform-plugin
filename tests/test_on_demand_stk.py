@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set
+from typing import Dict, Set
 
 from bifrost_plugin.ib_gateway.on_demand import build_desired_stk_symbols, list_fresh_on_demand_stk
 from bifrost_plugin.ib_gateway.redis_keys import (

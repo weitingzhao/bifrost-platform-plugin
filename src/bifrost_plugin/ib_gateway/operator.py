@@ -5,15 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
-from typing import Any, Awaitable, Callable, Dict, List, Tuple
+from typing import Any, Awaitable, Callable, Dict
 
 from redis.exceptions import ResponseError
 
-from bifrost_plugin.ib_gateway.protocol import CommandMessage, dumps_result, parse_stream_fields, result_key
+from bifrost_plugin.ib_gateway.protocol import CommandMessage, dumps_result, parse_stream_fields
 from bifrost_plugin.ib_gateway.redis_keys import (
     IB_OPERATOR_CMD_STREAM,
     IB_OPERATOR_CONSUMER_GROUP,
-    IB_OPERATOR_RESULT_PREFIX,
 )
 from bifrost_plugin.ib_gateway.writer import GatewayRedisWriter
 
