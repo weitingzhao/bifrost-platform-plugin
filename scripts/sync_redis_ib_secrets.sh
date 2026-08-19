@@ -18,7 +18,7 @@ DEV_PASS="${REDIS_IB_TRADE_DEV_PASS:?}"
 PROD_PASS="${REDIS_IB_TRADE_PROD_PASS:?}"
 PLATFORM_PASS="${REDIS_IB_PLATFORM_PASS:?}"
 
-echo "== Trade overlay configs =="
+echo "== Trade Secrets (gitignored bifrost-*-secrets.yaml) =="
 TRADE_INFRA="$TRADE_INFRA" PLUGIN_ENV="$PLUGIN_ENV" "$TRADE_INFRA/scripts/sync_redis_ib_trade_config.sh"
 
 echo ""
@@ -41,4 +41,5 @@ print(f"Updated {path} REDIS_IB_PLATFORM_PASS")
 PY
 fi
 
-echo "redis-ib secrets synced (plugin → trade overlays + platform .env)"
+echo "redis-ib secrets synced (plugin → trade Secrets + platform .env)"
+echo "Remember: kubectl apply Trade Secrets + install-redis-ib if ACL passwords changed."

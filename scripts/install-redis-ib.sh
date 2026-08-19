@@ -25,6 +25,8 @@ ACL=$(sed \
   -e "s|>TRADE_PROD_PASS|>${REDIS_IB_TRADE_PROD_PASS}|g" \
   -e "s|>TRADE_DEV_PASS|>${REDIS_IB_TRADE_DEV_PASS}|g" \
   -e "s|>PLATFORM_PASS|>${REDIS_IB_PLATFORM_PASS}|g" \
+  -e '/^[[:space:]]*#/d' \
+  -e '/^[[:space:]]*$/d' \
   "$ROOT/k8s/redis-ib/acl.conf.example")
 
 kubectl create namespace data --dry-run=client -o yaml | kubectl apply -f -
