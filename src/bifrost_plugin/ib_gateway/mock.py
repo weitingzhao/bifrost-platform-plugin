@@ -86,35 +86,6 @@ class MockGateway:
                     ]
                 },
             }
-        if msg.op == "fetch_bars_range":
-            sym = str(payload.get("symbol") or "SPY").upper()
-            base = self._prices.get(sym, 100.0)
-            now = time.time()
-            return {
-                "ok": True,
-                "data": {
-                    "bars": [
-                        {
-                            "bar_time": now - 86400,
-                            "open": base - 1,
-                            "high": base + 1,
-                            "low": base - 2,
-                            "close": base,
-                            "volume": 1000000,
-                            "date": "mock",
-                        },
-                        {
-                            "bar_time": now,
-                            "open": base,
-                            "high": base + 0.5,
-                            "low": base - 0.5,
-                            "close": base + 0.25,
-                            "volume": 900000,
-                            "date": "mock",
-                        },
-                    ]
-                },
-            }
         if msg.op == "fetch_option_expirations":
             sym = str(payload.get("symbol") or "NVDA").upper()
             return {

@@ -11,7 +11,6 @@ PROTOCOL_VERSION = "1"
 
 ALL_OPS: Tuple[str, ...] = (
     "fetch_bars",
-    "fetch_bars_range",
     "fetch_option_expirations",
     "fetch_option_snapshot",
     "refresh_option_cache",

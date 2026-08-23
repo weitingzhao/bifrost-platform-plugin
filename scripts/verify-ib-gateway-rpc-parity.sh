@@ -38,7 +38,6 @@ GW_MODE=$(kubectl get configmap ib-gateway-config -n data -o jsonpath='{.data.mo
 rpc_ping ping '{}'
 rpc_ping fetch_accounts_snapshot '{}'
 rpc_ping fetch_bars '{"symbol":"NVDA","period":"1 day","duration":"1 D"}'
-rpc_ping fetch_bars_range '{"symbol":"SPY","period":"1 D"}'
 rpc_ping fetch_executions '{"days":1}'
 rpc_ping fetch_option_expirations '{"symbol":"NVDA"}'
 rpc_ping fetch_option_snapshot '{"symbol":"NVDA","expiration":"20260718","strikes":[130]}'

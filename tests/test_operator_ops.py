@@ -16,7 +16,6 @@ ALL_OPS = (
     "reconnect_all",
     "fetch_accounts_snapshot",
     "fetch_bars",
-    "fetch_bars_range",
     "fetch_executions",
     "fetch_option_expirations",
     "fetch_option_snapshot",
@@ -75,7 +74,7 @@ def _gateway() -> MockGateway:
 async def test_mock_gateway_supports_all_ops(op: str) -> None:
     gw = _gateway()
     payload: dict = {}
-    if op in ("fetch_bars", "fetch_bars_range", "fetch_option_expirations", "fetch_option_snapshot"):
+    if op in ("fetch_bars", "fetch_option_expirations", "fetch_option_snapshot"):
         payload = {"symbol": "NVDA"}
     if op == "fetch_option_snapshot":
         payload = {"symbol": "NVDA", "expiration": "20260718", "strikes": [130.0]}
@@ -90,22 +89,3 @@ async def test_mock_gateway_supports_all_ops(op: str) -> None:
     )
     result = await gw.handle_command(msg)
     assert result.get("ok") is True, f"{op} failed: {result}"
-
-
-@pytest.mark.asyncio
-async def test_fetch_bars_range_returns_bar_time() -> None:
-    gw = _gateway()
-    msg = CommandMessage(
-        req_id="bars-range",
-        version="1",
-        op="fetch_bars_range",
-        payload={"symbol": "SPY", "period": "1 D"},
-        caller="pytest",
-        deadline_ms=None,
-        stream_id="0-0",
-    )
-    result = await gw.handle_command(msg)
-    assert result["ok"] is True
-    bars = result["data"]["bars"]
-    assert len(bars) >= 1
-    assert "bar_time" in bars[0]

@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional
 from bifrost_plugin.ib_gateway.connection import ConnectionState, SlotConnection
 from bifrost_plugin.ib_gateway.ib_ops import (
     fetch_accounts_snapshot_rows,
-    fetch_bars_range,
     fetch_executions,
     fetch_option_expirations,
     fetch_option_quote_one_shot,
@@ -135,29 +134,6 @@ class LiveGateway:
                 for b in bars
             ]
             return {"ok": True, "data": {"bars": rows}}
-        if op == "fetch_bars_range":
-            host = self._host_slot()
-            if host is None:
-                return {"ok": False, "error": "host_not_connected"}
-            symbol = str(payload.get("symbol") or "").strip().upper()
-            if not symbol:
-                return {"ok": False, "error": "missing_symbol"}
-            period = str(payload.get("period") or "1 D").strip()
-            start_ts = payload.get("start_ts")
-            end_ts = payload.get("end_ts")
-            interval = payload.get("interval_sec")
-            st = float(start_ts) if start_ts is not None else None
-            et = float(end_ts) if end_ts is not None else None
-            iv = float(interval) if interval is not None and float(interval) > 0 else None
-            bars = await fetch_bars_range(
-                host.ib,
-                symbol,
-                period,
-                start_ts=st,
-                end_ts=et,
-                interval_sec=iv,
-            )
-            return {"ok": True, "data": {"bars": bars}}
         if op == "fetch_option_expirations":
             host = self._host_slot()
             if host is None:

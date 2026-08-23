@@ -74,7 +74,6 @@ ib_op = """ib_operator:
   health_refresh_sec: 30
   max_result_bytes: 4194304
   block_ms: 5000
-  use_for_celery_bars: true
 """
 text = path.read_text(encoding="utf-8")
 if not re.search(r"^ib_operator:\n", text, re.MULTILINE):

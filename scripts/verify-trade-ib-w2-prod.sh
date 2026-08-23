@@ -1,77 +1,49 @@
 #!/usr/bin/env bash
-# TIBM Rollout W2 — runtime verify prod celery-worker after Platform IB Gateway bars rollout.
+# TIBM Rollout W2 — PROD verify after Celery bars RETIRED (Polygon Plugin owns stock OHLC ingest).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
-# shellcheck disable=SC1091
-source "$(dirname "$0")/lib/tibm_prod_defaults.sh"
-NS="${PROD_NAMESPACE}"
-MIN_CORE_VERSION="${TIBM_W2_MIN_CORE_VERSION:-0.2.10}"
+NS="${PROD_NAMESPACE:-bifrost-prod}"
 
-echo "== TIBM W2 prod runtime verify =="
+echo "== TIBM W2 PROD runtime verify (Celery bars RETIRED) =="
 echo
 
-echo "== [1/7] celery-worker deployment ready =="
-kubectl wait --for=condition=available "deployment/celery-worker" -n "${NS}" --timeout=120s
-echo "  celery-worker available"
+echo "== [1/4] No stocks_ib Celery worker deployment =="
+if kubectl get deploy celery-worker-stocks-ib -n "${NS}" >/dev/null 2>&1; then
+  replicas=$(kubectl get deploy celery-worker-stocks-ib -n "${NS}" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+  if [[ "${replicas}" != "0" ]]; then
+    echo "ERROR: celery-worker-stocks-ib replicas=${replicas} (expected retired / 0)" >&2
+    exit 1
+  fi
+  echo "  celery-worker-stocks-ib present at replicas=0 (legacy object)"
+else
+  echo "  celery-worker-stocks-ib absent OK"
+fi
 
-echo "== [2/7] Daemon observe-safe unchanged (D10) =="
+echo "== [2/4] Daemon still scaled down (D10) =="
 daemon_replicas=$(kubectl get deploy daemon -n "${NS}" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "missing")
-if [[ "$daemon_replicas" -lt 1 ]]; then
-  echo "ERROR: daemon replicas=${daemon_replicas} (prod observe-safe expects >=1)" >&2
+if [[ "$daemon_replicas" != "0" ]]; then
+  echo "ERROR: daemon replicas=${daemon_replicas} (expected 0 for D10)" >&2
   exit 1
 fi
-echo "  daemon replicas=${daemon_replicas} OK (W2 does not change daemon trading mode)"
+echo "  daemon replicas=0 OK"
 
-echo "== [3/7] bifrost-core >= ${MIN_CORE_VERSION} in celery-worker pod =="
-kubectl exec -n "${NS}" deploy/celery-worker -- python -c "
-import importlib.metadata as m
-v = m.version('bifrost-core')
-min_v = '${MIN_CORE_VERSION}'.split('.')
-cur = v.split('.')
-for i in range(max(len(min_v), len(cur))):
-    a = int(cur[i]) if i < len(cur) else 0
-    b = int(min_v[i]) if i < len(min_v) else 0
-    if a > b:
-        break
-    if a < b:
-        raise SystemExit(f'ERROR: bifrost-core {v} < ${MIN_CORE_VERSION}')
-print(f'  bifrost-core {v} OK')
-"
+echo "== [3/4] Trade IB health (ticks / operator) =="
+make -C "$ROOT" verify-trade-ib-health
 
-echo "== [4/7] IbOperatorBarsAdapter import + use_for_celery_bars =="
-kubectl exec -n "${NS}" deploy/celery-worker -- python -c "
-import importlib.util
-assert importlib.util.find_spec('bifrost_worker.data.bars.ib_operator_transport'), 'missing ib_operator_transport'
-from bifrost_core.ib_operator.config import effective_ib_operator_settings
-import yaml, os
-with open(os.environ['BIFROST_CONFIG']) as f:
-    cfg = yaml.safe_load(f)
-op = effective_ib_operator_settings(cfg)
-assert op.get('use_for_celery_bars') is True, 'use_for_celery_bars must be true'
-print('  IbOperatorBarsAdapter module + use_for_celery_bars OK')
-"
-
-echo "== [5/7] Worker pod arch linux/amd64 =="
-arch=$(kubectl exec -n "${NS}" deploy/celery-worker -- uname -m)
-if [[ "$arch" != "x86_64" ]]; then
-  echo "ERROR: celery-worker arch=${arch} (expected x86_64)" >&2
+echo "== [4/4] Worker package has no bars Celery module =="
+WORKER_ROOT="${ROOT}/../bifrost-trade-worker/src/bifrost_worker"
+if [[ -d "${WORKER_ROOT}/data/bars" ]]; then
+  echo "ERROR: bifrost_worker.data.bars still present" >&2
   exit 1
 fi
-echo "  arch ${arch} OK"
-
-echo "== [6/7] Celery bars RPC (verify-trade-celery-bars) =="
-make -C "$ROOT" verify-trade-celery-bars
-
-echo "== [7/7] No MarketIbClient / direct ib_insync in worker bars path (source grep) =="
-TASKS="${ROOT}/../bifrost-trade-worker/src/bifrost_worker/data/bars/tasks.py"
-if grep -qE 'MarketIbClient|ib_insync' "$TASKS"; then
-  echo "ERROR: tasks.py still references direct TWS imports" >&2
+if [[ -d "${WORKER_ROOT}/celery" ]]; then
+  echo "ERROR: bifrost_worker.celery still present" >&2
   exit 1
 fi
-echo "  tasks.py bars transport RPC-only OK"
+echo "  worker Celery/bars packages removed OK"
 
 echo
-echo "TIBM W2 prod runtime verification OK"
+echo "TIBM W2 PROD runtime verification OK (Celery bars superseded by Market Data Plugin)"
