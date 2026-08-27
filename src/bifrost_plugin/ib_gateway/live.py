@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import time
@@ -21,6 +22,7 @@ from bifrost_plugin.ib_gateway.on_demand_opt import list_fresh_on_demand_opt, pa
 from bifrost_plugin.ib_gateway.protocol import CommandMessage
 from bifrost_plugin.ib_gateway.settings import GatewaySettings
 from bifrost_plugin.ib_gateway.redis_keys import (
+    IB_ACCOUNT_SNAPSHOT_KEY,
     IB_OPTION_ON_DEMAND_SET,
     IB_OPTION_ON_DEMAND_TS,
     stk_contract_key,
@@ -50,6 +52,8 @@ class LiveGateway:
         self._cmd_count = 0
         self._tickers: Dict[str, Any] = {}
         self._last_reconcile_at = 0.0
+        self._self_heal_stale_streak = 0
+        self._self_heal_cooldown_until = 0.0
 
     def slot_for_payload(self, payload: Dict[str, Any]) -> Optional[SlotConnection]:
         slot_name = (payload.get("account_slot") or "primary").strip().lower()
@@ -459,6 +463,79 @@ class LiveGateway:
             sleep_sec = max(1.0, float(self._settings.opt_cache_refresh_sec))
             await asyncio.sleep(sleep_sec)
 
+    def _read_snapshot_updated_at(self) -> Optional[float]:
+        try:
+            raw = self._writer.redis.get(IB_ACCOUNT_SNAPSHOT_KEY)
+            if not raw:
+                return None
+            if isinstance(raw, bytes):
+                raw = raw.decode("utf-8", errors="replace")
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                return None
+            updated = data.get("updated_at")
+            if updated is None:
+                return None
+            return float(updated)
+        except Exception as e:
+            logger.debug("read snapshot updated_at: %s", e)
+            return None
+
+    async def _maybe_self_heal_snapshot_stale(self, host_ok: bool) -> None:
+        settings_enabled = self._settings.self_heal_enabled
+        runtime_enabled = self._writer.read_self_heal_enabled()
+        if not settings_enabled or not runtime_enabled:
+            return
+        if not host_ok:
+            return
+        now = time.time()
+        if now < self._self_heal_cooldown_until:
+            return
+        updated_at = self._read_snapshot_updated_at()
+        if updated_at is None:
+            return
+        age = now - updated_at
+        stale_sec = float(self._settings.snapshot_stale_reconnect_sec)
+        if age <= stale_sec:
+            if self._self_heal_stale_streak > 0:
+                self._self_heal_stale_streak = 0
+                self._writer.write_self_heal_status(
+                    last_action="idle",
+                    last_action_ts=now,
+                    stale_streak=0,
+                    cooldown_until=0.0,
+                    reason="snapshot_fresh",
+                    self_heal_enabled=True,
+                    rollout_recommended=False,
+                    snapshot_age_sec=age,
+                )
+            return
+
+        self._self_heal_stale_streak += 1
+        cooldown = float(self._settings.soft_reconnect_cooldown_sec)
+        self._self_heal_cooldown_until = now + cooldown
+        max_before_rollout = int(self._settings.snapshot_stale_max_before_rollout)
+        rollout_recommended = self._self_heal_stale_streak >= max_before_rollout
+        reason = f"snapshot_stale_{age:.0f}s"
+        logger.warning(
+            "ib-gateway.self-heal: %s (streak=%d) — disconnect_all + reconnect_all",
+            reason,
+            self._self_heal_stale_streak,
+        )
+        self._writer.write_self_heal_status(
+            last_action="soft_reconnect",
+            last_action_ts=now,
+            stale_streak=self._self_heal_stale_streak,
+            cooldown_until=self._self_heal_cooldown_until,
+            reason=reason,
+            self_heal_enabled=True,
+            rollout_recommended=rollout_recommended,
+            snapshot_age_sec=age,
+        )
+        self._tickers.clear()
+        await self.disconnect_all()
+        await self.reconnect_all()
+
     async def _health_loop(self, stop: asyncio.Event) -> None:
         verify_every = 3  # every ~30s (loop sleeps 10s)
         tick = 0
@@ -475,6 +552,8 @@ class LiveGateway:
             sec = self._slots.get("secondary")
             host_ok = host is not None and host.state == ConnectionState.CONNECTED
             sec_ok = sec is not None and sec.state == ConnectionState.CONNECTED
+            if tick % verify_every == 0:
+                await self._maybe_self_heal_snapshot_stale(host_ok)
             # Use real IB activity timestamps — never wall-clock alone (hides ghost sessions).
             last_host = host.last_message_at if host else 0.0
             last_sec = sec.last_message_at if sec else 0.0

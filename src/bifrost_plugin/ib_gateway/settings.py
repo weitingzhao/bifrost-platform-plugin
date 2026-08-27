@@ -45,6 +45,11 @@ class GatewaySettings:
     opt_cache_pacing_sec: float = 0.5
     opt_cache_max_contracts: int = 40
     on_demand_opt_max_age_sec: float = 180.0
+    # Snapshot-stale self-heal (L0 — process-local soft reconnect)
+    self_heal_enabled: bool = True
+    snapshot_stale_reconnect_sec: float = 90.0
+    snapshot_stale_max_before_rollout: int = 3
+    soft_reconnect_cooldown_sec: float = 60.0
 
 
 def _env_bool(env_key: str, default: Any) -> bool:
@@ -123,6 +128,19 @@ def load_settings(path: str | None = None) -> GatewaySettings:
         on_demand_opt_max_age_sec=float(
             os.environ.get("IB_GATEWAY_ON_DEMAND_OPT_MAX_AGE_SEC")
             or raw.get("on_demand_opt_max_age_sec", 180)
+        ),
+        self_heal_enabled=_env_bool("IB_GATEWAY_SELF_HEAL_ENABLED", raw.get("self_heal_enabled", True)),
+        snapshot_stale_reconnect_sec=float(
+            os.environ.get("IB_GATEWAY_SNAPSHOT_STALE_SEC")
+            or raw.get("snapshot_stale_reconnect_sec", 90)
+        ),
+        snapshot_stale_max_before_rollout=int(
+            os.environ.get("IB_GATEWAY_SNAPSHOT_STALE_MAX_BEFORE_ROLLOUT")
+            or raw.get("snapshot_stale_max_before_rollout", 3)
+        ),
+        soft_reconnect_cooldown_sec=float(
+            os.environ.get("IB_GATEWAY_SOFT_RECONNECT_COOLDOWN_SEC")
+            or raw.get("soft_reconnect_cooldown_sec", 60)
         ),
     )
 

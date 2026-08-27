@@ -19,7 +19,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: ib-gateway
-          image: bifrost-platform-plugin-ib-gateway:0.1.0
+          image: bifrost-platform-plugin-ib-gateway:0.2.0
           imagePullPolicy: IfNotPresent
           env:
             - name: IB_GATEWAY_CONFIG

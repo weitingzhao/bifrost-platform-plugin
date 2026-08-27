@@ -14,6 +14,7 @@ from bifrost_plugin.ib_gateway.redis_keys import (
     IB_ACCOUNT_STREAM_KEY,
     IB_ACCOUNT_STREAM_MAXLEN,
     IB_GATEWAY_HEALTH_PREFIX,
+    IB_GATEWAY_SELF_HEAL_KEY,
     IB_INGESTER_CHANNEL,
     IB_INGESTER_HEALTH_KEY,
     IB_INGESTER_SUBSCRIPTIONS_KEY,
@@ -103,6 +104,45 @@ class GatewayRedisWriter:
     def write_operator_result(self, req_id: str, envelope: Dict[str, Any]) -> None:
         key = IB_OPERATOR_RESULT_PREFIX + req_id
         self._rds.set(key, json.dumps(envelope, default=str), ex=IB_OPERATOR_RESULT_TTL_SEC)
+
+    def write_self_heal_status(
+        self,
+        *,
+        last_action: str,
+        last_action_ts: float,
+        stale_streak: int,
+        cooldown_until: float,
+        reason: str,
+        self_heal_enabled: bool,
+        rollout_recommended: bool = False,
+        snapshot_age_sec: Optional[float] = None,
+    ) -> None:
+        """Publish L0 self-heal ladder state for platform-api / Console."""
+        fields: Dict[str, Any] = {
+            "last_action": last_action,
+            "last_action_ts": last_action_ts,
+            "stale_streak": stale_streak,
+            "cooldown_until": cooldown_until,
+            "reason": reason,
+            "enabled": "true" if self_heal_enabled else "false",
+            "rollout_recommended": "true" if rollout_recommended else "false",
+            "updated_at": time.time(),
+            "env": self._env,
+        }
+        if snapshot_age_sec is not None:
+            fields["snapshot_age_sec"] = snapshot_age_sec
+        self._write_hash(IB_GATEWAY_SELF_HEAL_KEY, fields)
+
+    def read_self_heal_enabled(self) -> bool:
+        """Runtime kill switch — platform-api may SET ``enabled`` on the self_heal hash."""
+        try:
+            raw = self._rds.hget(IB_GATEWAY_SELF_HEAL_KEY, "enabled")
+            if raw is None:
+                return True
+            return str(raw).strip().lower() in ("1", "true", "yes", "on")
+        except Exception as e:
+            logger.debug("read_self_heal_enabled: %s", e)
+            return True
 
     def write_plugin_health(self, account_id: str, status: str, extra: Optional[Dict[str, Any]] = None) -> None:
         body = {

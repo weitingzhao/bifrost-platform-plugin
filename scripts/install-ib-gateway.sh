@@ -6,7 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
-IMAGE="${IB_GATEWAY_IMAGE:-bifrost-platform-plugin-ib-gateway:0.1.0}"
+IMAGE="${IB_GATEWAY_IMAGE:-bifrost-platform-plugin-ib-gateway:0.2.0}"
 K3S_NODE="${K3S_NODE:-vision@192.168.10.73}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
