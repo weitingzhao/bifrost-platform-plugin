@@ -5,3 +5,4 @@ user trade-prod on >TRADE_PROD_PASS ~ib:* ~bifrost:health:ws_ib_* ~bifrost:healt
 # trade-dev: read-only observe (ticks/account snapshots/gateway health). K8s Dev account-sync must use trade-prod.
 user trade-dev on >TRADE_DEV_PASS ~ib:tick:* ~ib:ingester:* ~ib:account:* ~ib:health:* ~bifrost:health:ws_ib_* ~bifrost:health:daemon_* ~bifrost:health:account_sync_daemon allchannels +@read +ping +info +client|list
 user platform on >PLATFORM_PASS ~ib:health:* ~ib:events:* ~ib:control:* ~ib:tick:* ~ib:ingester:* ~ib:account:* ~bifrost:health:ws_ib_* ~bifrost:health:daemon_* ~bifrost:health:account_sync_daemon allchannels +@all
+# ib:control:gateway_self_heal — plugin L0/L0.5 self-heal ladder (platform-api reads; ib-gateway writes)
