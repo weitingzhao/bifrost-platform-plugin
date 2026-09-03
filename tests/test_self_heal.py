@@ -84,19 +84,40 @@ async def test_self_heal_cooldown_blocks_repeat() -> None:
 
 
 @pytest.mark.asyncio
-async def test_self_heal_rollout_recommended_after_streak() -> None:
+async def test_self_heal_rollout_recommended_after_streak(monkeypatch) -> None:
     gw = _live_gateway()
     stale_ts = time.time() - 200
     gw._writer.redis.get.return_value = json.dumps({"updated_at": stale_ts})
     gw.disconnect_all = AsyncMock()
     gw.reconnect_all = AsyncMock()
     gw._self_heal_stale_streak = 2
+    monkeypatch.setattr("bifrost_plugin.ib_gateway.live.os._exit", lambda _code: None)
+    monkeypatch.setattr("bifrost_plugin.ib_gateway.live.asyncio.sleep", AsyncMock())
     await gw._maybe_self_heal_snapshot_stale(host_ok=True)
     call_kw = gw._writer.write_self_heal_status.call_args.kwargs
     assert call_kw["stale_streak"] == 3
     assert call_kw["rollout_recommended"] is True
 
 
+@pytest.mark.asyncio
+async def test_self_heal_pod_restart_when_still_stale_after_streak(monkeypatch) -> None:
+    gw = _live_gateway()
+    stale_ts = time.time() - 200
+    gw._writer.redis.get.return_value = json.dumps({"updated_at": stale_ts})
+    gw.disconnect_all = AsyncMock()
+    gw.reconnect_all = AsyncMock()
+    gw._self_heal_stale_streak = 2
+    exit_calls: list[int] = []
+    monkeypatch.setattr("bifrost_plugin.ib_gateway.live.os._exit", exit_calls.append)
+    monkeypatch.setattr("bifrost_plugin.ib_gateway.live.asyncio.sleep", AsyncMock())
+    await gw._maybe_self_heal_snapshot_stale(host_ok=True)
+    assert exit_calls == [1]
+    gw.disconnect_all.assert_awaited_once()
+    gw.reconnect_all.assert_awaited_once()
+    call_kw = gw._writer.write_self_heal_status.call_args.kwargs
+    assert call_kw["last_action"] == "pod_restart_escalation"
+
+
 def test_writer_self_heal_key_contract() -> None:
-    assert IB_GATEWAY_SELF_HEAL_KEY == "bifrost:ib:gateway:self_heal"
+    assert IB_GATEWAY_SELF_HEAL_KEY == "ib:control:gateway_self_heal"
     assert IB_ACCOUNT_SNAPSHOT_KEY == "ib:account:snapshot:v1"

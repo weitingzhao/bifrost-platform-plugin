@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -54,6 +55,7 @@ class LiveGateway:
         self._last_reconcile_at = 0.0
         self._self_heal_stale_streak = 0
         self._self_heal_cooldown_until = 0.0
+        self._last_snapshot_write_at = 0.0
 
     def slot_for_payload(self, payload: Dict[str, Any]) -> Optional[SlotConnection]:
         slot_name = (payload.get("account_slot") or "primary").strip().lower()
@@ -228,84 +230,102 @@ class LiveGateway:
     async def _market_loop(self, stop: asyncio.Event) -> None:
         from ib_insync import Stock  # noqa: PLC0415
 
+        snapshot_fetch_timeout = 30.0
         while not stop.is_set():
-            host = self._slots.get("host")
-            if host is None or host.ib is None or host.state != ConnectionState.CONNECTED:
-                await asyncio.sleep(2)
-                continue
-            if not host.sync_connection_state():
-                self._tickers.clear()
-                await asyncio.sleep(2)
-                continue
-            if not host.cfg.has_market_data:
-                await asyncio.sleep(5)
-                continue
+            try:
+                host = self._slots.get("host")
+                if host is None or host.ib is None or host.state != ConnectionState.CONNECTED:
+                    await asyncio.sleep(2)
+                    continue
+                if not host.sync_connection_state():
+                    self._tickers.clear()
+                    await asyncio.sleep(2)
+                    continue
+                if not host.cfg.has_market_data:
+                    await asyncio.sleep(5)
+                    continue
 
-            # Account truth before tick optimism: empty managedAccounts = ghost session.
-            snap_accounts: List[Dict[str, Any]] = []
-            seen_accounts: set[str] = set()
-            ghost_slots: List[SlotConnection] = []
-            for sc in self._slots.values():
-                if sc.ib is None or sc.state != ConnectionState.CONNECTED:
-                    continue
-                if not sc.sync_connection_state():
-                    ghost_slots.append(sc)
-                    continue
-                rows = await fetch_accounts_snapshot_rows(sc.ib)
-                if not rows:
-                    logger.warning(
-                        "Ghost session slot=%s cid=%s — connected but managedAccounts empty",
-                        sc.cfg.slot,
-                        sc.client_id,
-                    )
-                    ghost_slots.append(sc)
-                    continue
-                sc.note_message()
-                for row in rows:
-                    aid = str(row.get("account_id") or "").strip()
-                    if not aid or aid in seen_accounts:
+                # Account truth before tick optimism: empty managedAccounts = ghost session.
+                snap_accounts: List[Dict[str, Any]] = []
+                seen_accounts: set[str] = set()
+                ghost_slots: List[SlotConnection] = []
+                for sc in self._slots.values():
+                    if sc.ib is None or sc.state != ConnectionState.CONNECTED:
                         continue
-                    seen_accounts.add(aid)
-                    snap_accounts.append({**row, "slot": sc.cfg.slot})
-            for sc in ghost_slots:
-                await sc.disconnect()
-            if ghost_slots:
-                self._tickers.clear()
+                    if not sc.sync_connection_state():
+                        ghost_slots.append(sc)
+                        continue
+                    try:
+                        rows = await asyncio.wait_for(
+                            fetch_accounts_snapshot_rows(sc.ib),
+                            timeout=snapshot_fetch_timeout,
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "Account snapshot fetch timed out slot=%s cid=%s — disconnecting",
+                            sc.cfg.slot,
+                            sc.client_id,
+                        )
+                        ghost_slots.append(sc)
+                        continue
+                    if not rows:
+                        logger.warning(
+                            "Ghost session slot=%s cid=%s — connected but managedAccounts empty",
+                            sc.cfg.slot,
+                            sc.client_id,
+                        )
+                        ghost_slots.append(sc)
+                        continue
+                    sc.note_message()
+                    for row in rows:
+                        aid = str(row.get("account_id") or "").strip()
+                        if not aid or aid in seen_accounts:
+                            continue
+                        seen_accounts.add(aid)
+                        snap_accounts.append({**row, "slot": sc.cfg.slot})
+                for sc in ghost_slots:
+                    await sc.disconnect()
+                if ghost_slots:
+                    self._tickers.clear()
 
-            host = self._slots.get("host")
-            sec = self._slots.get("secondary")
-            self._writer.write_account_snapshot(
-                {
-                    "host_connected": host is not None and host.state == ConnectionState.CONNECTED,
-                    "secondary_connected": sec is not None and sec.state == ConnectionState.CONNECTED,
-                    "accounts_snapshot": snap_accounts,
-                    "accounts_count": len(snap_accounts),
-                    "mode": "live",
-                }
-            )
+                host = self._slots.get("host")
+                sec = self._slots.get("secondary")
+                self._writer.write_account_snapshot(
+                    {
+                        "host_connected": host is not None and host.state == ConnectionState.CONNECTED,
+                        "secondary_connected": sec is not None and sec.state == ConnectionState.CONNECTED,
+                        "accounts_snapshot": snap_accounts,
+                        "accounts_count": len(snap_accounts),
+                        "mode": "live",
+                    }
+                )
+                self._last_snapshot_write_at = time.time()
 
-            if host is None or host.state != ConnectionState.CONNECTED or not snap_accounts:
+                if host is None or host.state != ConnectionState.CONNECTED or not snap_accounts:
+                    await asyncio.sleep(2)
+                    continue
+
+                self._reconcile_host_market_data(host, Stock)
+
+                for sym, ticker in list(self._tickers.items()):
+                    contract_key = stk_contract_key(sym)
+                    payload = {
+                        "bid": _float_or_none(ticker.bid),
+                        "ask": _float_or_none(ticker.ask),
+                        "last": _float_or_none(ticker.last),
+                        "mid": _float_or_none(ticker.midpoint()),
+                        "ts": time.time(),
+                        "contract_key": contract_key,
+                        "symbol": sym,
+                        "sec_type": "STK",
+                    }
+                    self._writer.write_tick(contract_key, payload)
+                    host.note_message()
+
                 await asyncio.sleep(2)
-                continue
-
-            self._reconcile_host_market_data(host, Stock)
-
-            for sym, ticker in list(self._tickers.items()):
-                contract_key = stk_contract_key(sym)
-                payload = {
-                    "bid": _float_or_none(ticker.bid),
-                    "ask": _float_or_none(ticker.ask),
-                    "last": _float_or_none(ticker.last),
-                    "mid": _float_or_none(ticker.midpoint()),
-                    "ts": time.time(),
-                    "contract_key": contract_key,
-                    "symbol": sym,
-                    "sec_type": "STK",
-                }
-                self._writer.write_tick(contract_key, payload)
-                host.note_message()
-
-            await asyncio.sleep(2)
+            except Exception:
+                logger.exception("market_loop iteration failed")
+                await asyncio.sleep(2)
 
     def _reconcile_host_market_data(self, host: SlotConnection, Stock: Any) -> None:
         """Diff watchlist ∪ fresh on-demand vs active Host reqMktData streams."""
@@ -535,6 +555,31 @@ class LiveGateway:
         self._tickers.clear()
         await self.disconnect_all()
         await self.reconnect_all()
+
+        max_before_rollout = int(self._settings.snapshot_stale_max_before_rollout)
+        if self._self_heal_stale_streak >= max_before_rollout:
+            # L0.5 — soft reconnect cannot unblock a stuck market loop; exit for K8s restart.
+            await asyncio.sleep(20)
+            updated_after = self._read_snapshot_updated_at()
+            age_after = (now - updated_after) if updated_after is not None else stale_sec + 1
+            if age_after > stale_sec:
+                logger.error(
+                    "ib-gateway.self-heal: snapshot still stale after soft reconnect "
+                    "(age=%.0fs streak=%d) — exiting for pod restart",
+                    age_after,
+                    self._self_heal_stale_streak,
+                )
+                self._writer.write_self_heal_status(
+                    last_action="pod_restart_escalation",
+                    last_action_ts=time.time(),
+                    stale_streak=self._self_heal_stale_streak,
+                    cooldown_until=self._self_heal_cooldown_until,
+                    reason=f"snapshot_still_stale_{age_after:.0f}s_after_soft_reconnect",
+                    self_heal_enabled=True,
+                    rollout_recommended=True,
+                    snapshot_age_sec=age_after,
+                )
+                os._exit(1)
 
     async def _health_loop(self, stop: asyncio.Event) -> None:
         verify_every = 3  # every ~30s (loop sleeps 10s)

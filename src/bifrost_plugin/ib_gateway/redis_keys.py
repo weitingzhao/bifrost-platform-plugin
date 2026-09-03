@@ -30,7 +30,7 @@ IB_OPERATOR_RESULT_PREFIX = "ib:operator:result:"
 IB_OPERATOR_RESULT_TTL_SEC = 300
 
 IB_GATEWAY_HEALTH_PREFIX = "ib:health:"
-IB_GATEWAY_SELF_HEAL_KEY = "bifrost:ib:gateway:self_heal"
+IB_GATEWAY_SELF_HEAL_KEY = "ib:control:gateway_self_heal"
 
 # Canonical STK contract_key — must match bifrost_core / trade-socket ingestor.
 STK_CONTRACT_KEY_SUFFIX = "|STK|||"
