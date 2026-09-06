@@ -2,6 +2,19 @@
 
 与本项目用户对话一律使用中文回复；UI 字符串与代码标识符使用 English。
 
+## 工作区定位（2026-09-06）
+
+| 项 | 值 |
+|---|---|
+| 域 / 载荷 | Ops · **IB Gateway Plugin** —— 全系统**唯一**连接 TWS 的组件（IB API socket，client_ids 70/71 Host、72/73 Secondary）→ `redis-ib` @ `data` NS |
+| IB 接入模型 | IB 登录只发生在两台 Win11 的 TWS 软件里（Owner 手工登录 + 2FA），工作区与集群里没有 IB 密码；账户号 `U17123565` / `U8829175` 是标识符不是秘密 |
+| D10 | operator 命令流只有 Daemon 可写；Plugin 不下单、不武装实盘 |
+| 仓库可见性 | GitHub **PUBLIC**（12 个 repo 全部公开）—— `.env`、Secret YAML、dump、kubeconfig、账户内容永不入库 |
+| 硬边界 | D10 交易执行冻结（BLOCKED）· D13 三域边界 · 平台/业务解耦（Flywheel A/B） |
+| 事实基线 | `../AGENT_FACTS.md`（§8c 运行时与安全事实）· 规则 `../CLAUDE.md`（§8 Claude Code 运行配置） |
+
+会话请在工作区根 `/stocks` 启动（加载治理层 hooks / auto mode / 共享记忆）；运行时与安全事实以 `../AGENT_FACTS.md` §8c 为准。
+
 ## 职责
 
 **`bifrost-plugin`** — Bifrost Ops Platform 的 **Plugin 仓库**。承载非通用系统运维能力（与 `bifrost-platform` 核心控制面分离）。
