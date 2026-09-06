@@ -23,7 +23,7 @@ def test_redis_key_contracts() -> None:
     assert ck == STK_TICK_EXAMPLE
     assert REDIS_TICK_PATTERN.format(contract_key=ck) == ingester_tick_key(ck)
     assert ingester_tick_key(ck) == "ib:ingester:tick:NVDA|STK|||"
-    assert REDIS_HEALTH.format(account_id="wzhao1503") == "ib:health:wzhao1503"
+    assert REDIS_HEALTH.format(account_id="U11111111") == "ib:health:U11111111"
     assert REDIS_OPERATOR_CMD == "ib:operator:cmd"
 
 

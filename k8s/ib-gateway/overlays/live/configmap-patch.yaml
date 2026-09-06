@@ -17,12 +17,12 @@ data:
       host:
         ip: 192.168.10.30
         port_type: tws_live
-        account: wzhao1503
+        account: U17123565
         client_ids: [70, 71]
       secondary:
         ip: 192.168.10.32
         port_type: tws_live
-        account: vzhao1503
+        account: U8829175
         client_ids: [72, 73]
     probe_interval_sec: 60
     health_ttl_sec: 30
