@@ -39,11 +39,11 @@ kubectl create secret generic ib-gateway-redis \
   --from-literal=password="${REDIS_IB_GATEWAY_PASS}" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl apply -k "$ROOT/k8s/ib-gateway"
+kubectl apply -k "$ROOT/k8s/ib-gateway/base"
 
 echo "Waiting for ib-gateway rollout..."
 kubectl rollout status deployment/ib-gateway -n data --timeout=120s
 kubectl get pods,deploy -n data -l app.kubernetes.io/name=ib-gateway
 
-echo "== Switch mock → live (base k8s/ib-gateway ships mock ConfigMap) =="
+echo "== Switch mock → live (base k8s/ib-gateway/base ships mock ConfigMap) =="
 make -C "$ROOT" ib-gateway-set-live

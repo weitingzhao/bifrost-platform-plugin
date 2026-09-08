@@ -1,13 +1,28 @@
-# Production live TWS — apply after base install:
+# Production live TWS.
+#
 #   kubectl apply -k k8s/ib-gateway/overlays/live
-# Or: make ib-gateway-set-live (platform-api L1)
+#
+# This is the one apply that is safe once the gateway is live: it carries both
+# `mode: live` and the IB account numbers. Applying ../../base directly would
+# also work for the accounts but would reset mode to mock, because that is what
+# base ships.
+#
+# `make ib-gateway-set-live` is the other route, and it is not equivalent: it
+# POSTs platform-api control/mode, which patches only the `mode:` line and
+# leaves every other field — including the accounts — exactly as it found them.
+# That is why the cluster kept TWS login names in `account:` long after the repo
+# moved to account numbers in de2ef8a.
+#
+# The base lives in ../../base rather than ../.. — kustomize refuses a base
+# directory that contains its own overlay, so `apply -k` here failed outright
+# with a cycle error until the manifests were moved down one level.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 namespace: data
 
 resources:
-  - ../../
+  - ../../base
 
 patches:
   - path: configmap-patch.yaml

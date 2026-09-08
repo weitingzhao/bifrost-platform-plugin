@@ -62,7 +62,8 @@ Sign-off: **Ops Console → Architecture → Plugins → IB Gateway → Phase 0 
 ```
 src/bifrost_plugin/ib_gateway/   # IB Gateway Python package (Phase 1+)
 k8s/redis-ib/                    # Shared IB Redis
-k8s/ib-gateway/                  # Gateway StatefulSet (Phase 1+)
+k8s/ib-gateway/base/             # Gateway Deployment + mock ConfigMap
+k8s/ib-gateway/overlays/live/    # mode: live + IB account numbers
 k8s/external-names/              # Cross-NS aliases
 scripts/                         # Install helpers
 ```
