@@ -103,3 +103,9 @@ def test_health_dict_reports_progress_age() -> None:
     gw._opt_cache_progress_at = time.time() - 42
     age = gw.health_dict()["opt_cache_progress_age_sec"]
     assert 41 <= age <= 45
+
+
+def test_health_dict_carries_the_heartbeat_timestamp() -> None:
+    gw = _gateway()
+    gw._opt_cache_progress_at = 1_790_000_000.123
+    assert gw.health_dict()["opt_cache_progress_ts"] == 1_790_000_000.123

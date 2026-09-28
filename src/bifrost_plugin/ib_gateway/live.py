@@ -229,6 +229,9 @@ class LiveGateway:
             "host_client_id": host.client_id if host else None,
             "secondary_client_id": sec.client_id if sec else None,
             "opt_cache_progress_age_sec": round(time.time() - self._opt_cache_progress_at, 1),
+            # Epoch of the heartbeat itself: the operator health hash has no TTL, so a reader
+            # must compute the age at read time or a dead health loop would freeze it small.
+            "opt_cache_progress_ts": round(self._opt_cache_progress_at, 3),
         }
 
     async def _market_loop(self, stop: asyncio.Event) -> None:
