@@ -10,6 +10,7 @@ from typing import Union
 import redis
 
 from bifrost_plugin.ib_gateway.live import LiveGateway
+from bifrost_plugin.ib_gateway.log_filters import install_log_filters
 from bifrost_plugin.ib_gateway.mock import MockGateway
 from bifrost_plugin.ib_gateway.operator import operator_loop
 from bifrost_plugin.ib_gateway.settings import GatewaySettings, load_settings
@@ -32,6 +33,7 @@ def make_redis(settings: GatewaySettings) -> redis.Redis:
 
 
 async def run_gateway(settings: GatewaySettings | None = None) -> None:
+    install_log_filters()
     settings = settings or load_settings()
     rds = make_redis(settings)
     writer = GatewayRedisWriter(rds, env=settings.env_label)
