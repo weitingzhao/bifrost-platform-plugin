@@ -226,11 +226,11 @@ async def fetch_underlying_price(ib: Any, symbol: str) -> Optional[float]:
                 try:
                     v = float(last)
                     if v > 0:
-                        ib.cancelMktData(ticker)
+                        ib.cancelMktData(stock)
                         return v
                 except (TypeError, ValueError):
                     pass
-        ib.cancelMktData(ticker)
+        ib.cancelMktData(stock)
     except Exception as e:
         logger.debug("fetch_underlying_price %s: %s", sym, e)
     return None
@@ -297,7 +297,10 @@ async def fetch_option_quote_one_shot(
     finally:
         if ticker is not None:
             try:
-                ib.cancelMktData(ticker)
+                # ib_insync keys subscriptions by id() of the contract object passed to
+                # reqMktData; passing the Ticker logs "No reqId found" and leaves the
+                # stream open on TWS.
+                ib.cancelMktData(contract)
             except Exception:
                 pass
 
