@@ -56,6 +56,9 @@ class LiveGateway:
         self._self_heal_stale_streak = 0
         self._self_heal_cooldown_until = 0.0
         self._last_snapshot_write_at = 0.0
+        # Opt cache loop liveness: bumped every loop iteration and after every contract.
+        self._opt_cache_progress_at = time.time()
+        self._opt_cache_stale_warned_at = 0.0
 
     def slot_for_payload(self, payload: Dict[str, Any]) -> Optional[SlotConnection]:
         slot_name = (payload.get("account_slot") or "primary").strip().lower()
@@ -225,6 +228,7 @@ class LiveGateway:
             "secondary_present": sec is not None,
             "host_client_id": host.client_id if host else None,
             "secondary_client_id": sec.client_id if sec else None,
+            "opt_cache_progress_age_sec": round(time.time() - self._opt_cache_progress_at, 1),
         }
 
     async def _market_loop(self, stop: asyncio.Event) -> None:
@@ -421,6 +425,7 @@ class LiveGateway:
             fresh = fresh[:cap]
 
         pacing = max(0.0, float(self._settings.opt_cache_pacing_sec))
+        timeout = max(1.0, float(self._settings.opt_cache_one_shot_timeout_sec))
         refreshed = 0
         for i, ck in enumerate(fresh):
             parsed = parse_opt_contract_key(ck)
@@ -428,10 +433,18 @@ class LiveGateway:
                 continue
             sym, expiry, strike, right = parsed
             try:
-                quote = await fetch_option_quote_one_shot(host.ib, sym, expiry, strike, right)
+                # Cancelling the one-shot runs its finally, which cancels the stream it opened.
+                quote = await asyncio.wait_for(
+                    fetch_option_quote_one_shot(host.ib, sym, expiry, strike, right),
+                    timeout=timeout,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("opt cache one-shot for %s timed out after %.0fs", sym, timeout)
+                quote = None
             except Exception as e:
                 logger.debug("opt cache one_shot %s: %s", ck, e)
                 quote = None
+            self._opt_cache_progress_at = time.time()
             if quote is None:
                 if pacing > 0 and i + 1 < len(fresh):
                     await asyncio.sleep(pacing)
@@ -469,6 +482,7 @@ class LiveGateway:
     async def _opt_cache_loop(self, stop: asyncio.Event) -> None:
         """Periodic one-shot OPT quote refresh for on-demand contract keys (non-blocking vs STK)."""
         while not stop.is_set():
+            self._opt_cache_progress_at = time.time()
             if not self._settings.opt_cache_enabled:
                 await asyncio.sleep(5)
                 continue
@@ -581,6 +595,25 @@ class LiveGateway:
                 )
                 os._exit(1)
 
+    def _check_opt_cache_liveness(self, now: Optional[float] = None) -> float:
+        """Warn (rate-limited) when the opt cache loop stopped making progress.
+
+        The loop bumps its heartbeat every iteration, host up or not, so a stale
+        heartbeat means the task is stuck on an await or has died. Before 0.2.4 that
+        happened with no log line at all. Returns the heartbeat age in seconds.
+        """
+        ts = time.time() if now is None else now
+        age = ts - self._opt_cache_progress_at
+        limit = float(self._settings.opt_cache_stale_warn_sec)
+        if age > limit and ts - self._opt_cache_stale_warned_at >= limit:
+            self._opt_cache_stale_warned_at = ts
+            logger.warning(
+                "opt cache loop has made no progress for %.0fs (limit %.0fs): stuck or dead",
+                age,
+                limit,
+            )
+        return age
+
     async def _health_loop(self, stop: asyncio.Event) -> None:
         verify_every = 3  # every ~30s (loop sleeps 10s)
         tick = 0
@@ -599,6 +632,7 @@ class LiveGateway:
             sec_ok = sec is not None and sec.state == ConnectionState.CONNECTED
             if tick % verify_every == 0:
                 await self._maybe_self_heal_snapshot_stale(host_ok)
+            self._check_opt_cache_liveness()
             # Use real IB activity timestamps — never wall-clock alone (hides ghost sessions).
             last_host = host.last_message_at if host else 0.0
             last_sec = sec.last_message_at if sec else 0.0

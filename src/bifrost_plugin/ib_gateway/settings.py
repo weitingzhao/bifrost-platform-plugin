@@ -45,6 +45,10 @@ class GatewaySettings:
     opt_cache_pacing_sec: float = 0.5
     opt_cache_max_contracts: int = 40
     on_demand_opt_max_age_sec: float = 180.0
+    # A one-shot that never answers must not stall the loop (it did, silently, before 0.2.4).
+    opt_cache_one_shot_timeout_sec: float = 10.0
+    # Warn when the opt cache loop has made no progress for this long (stuck or dead task).
+    opt_cache_stale_warn_sec: float = 120.0
     # Snapshot-stale self-heal (L0 — process-local soft reconnect)
     self_heal_enabled: bool = True
     snapshot_stale_reconnect_sec: float = 90.0
@@ -128,6 +132,14 @@ def load_settings(path: str | None = None) -> GatewaySettings:
         on_demand_opt_max_age_sec=float(
             os.environ.get("IB_GATEWAY_ON_DEMAND_OPT_MAX_AGE_SEC")
             or raw.get("on_demand_opt_max_age_sec", 180)
+        ),
+        opt_cache_one_shot_timeout_sec=float(
+            os.environ.get("IB_GATEWAY_OPT_CACHE_ONE_SHOT_TIMEOUT_SEC")
+            or raw.get("opt_cache_one_shot_timeout_sec", 10)
+        ),
+        opt_cache_stale_warn_sec=float(
+            os.environ.get("IB_GATEWAY_OPT_CACHE_STALE_WARN_SEC")
+            or raw.get("opt_cache_stale_warn_sec", 120)
         ),
         self_heal_enabled=_env_bool("IB_GATEWAY_SELF_HEAL_ENABLED", raw.get("self_heal_enabled", True)),
         snapshot_stale_reconnect_sec=float(
