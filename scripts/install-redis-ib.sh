@@ -1,39 +1,22 @@
 #!/usr/bin/env bash
 # Apply redis-ib to data NS — creates ACL secret from .env then kubectl apply -k.
+# A running redis-ib does not re-read the file on its own: to change users on a live bus use
+# scripts/redis-ib-env-users.sh acl (ACL LOAD, connections stay up), not a pod restart — redis-ib
+# keeps nothing on disk, so a restart empties the bus.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "Missing $ENV_FILE — copy .env.example and set passwords." >&2
-  exit 1
-fi
-
-# shellcheck disable=SC1090
-source "$ENV_FILE"
-
-for var in REDIS_IB_GATEWAY_PASS REDIS_IB_TRADE_PROD_PASS REDIS_IB_TRADE_DEV_PASS REDIS_IB_PLATFORM_PASS; do
-  if [[ -z "${!var:-}" || "${!var}" == change-me-* ]]; then
-    echo "Set $var in $ENV_FILE before install." >&2
-    exit 1
-  fi
-done
-
-ACL=$(sed \
-  -e "s|>GATEWAY_PASS|>${REDIS_IB_GATEWAY_PASS}|g" \
-  -e "s|>TRADE_PROD_PASS|>${REDIS_IB_TRADE_PROD_PASS}|g" \
-  -e "s|>TRADE_DEV_PASS|>${REDIS_IB_TRADE_DEV_PASS}|g" \
-  -e "s|>PLATFORM_PASS|>${REDIS_IB_PLATFORM_PASS}|g" \
-  -e '/^[[:space:]]*#/d' \
-  -e '/^[[:space:]]*$/d' \
-  "$ROOT/k8s/redis-ib/acl.conf.example")
+ACL_FILE="$(mktemp)"
+chmod 600 "$ACL_FILE"
+trap 'rm -f "$ACL_FILE"' EXIT
+"$ROOT/scripts/render-redis-ib-acl.sh" > "$ACL_FILE"
 
 kubectl create namespace data --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create secret generic redis-ib-acl \
   --namespace=data \
-  --from-literal=acl.conf="$ACL" \
+  --from-file=acl.conf="$ACL_FILE" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl apply -k "$ROOT/k8s/redis-ib"

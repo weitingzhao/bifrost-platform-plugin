@@ -25,6 +25,10 @@ IB_ACCOUNT_STREAM_MAXLEN = 1000
 
 IB_OPERATOR_HEALTH_KEY = "bifrost:health:ws_ib_operator"
 IB_OPERATOR_CMD_STREAM = "ib:operator:cmd"
+# One command stream per non-production Trade environment. Each env's redis-ib ACL user may add
+# entries only to its own stream, and the gateway answers only read ops there, so DEV and STG can
+# query IB but cannot disconnect or reconnect the gateway PROD runs on (debt TD-21).
+IB_OPERATOR_ENV_CMD_STREAMS = ("ib:operator:cmd:dev", "ib:operator:cmd:stg")
 IB_OPERATOR_CONSUMER_GROUP = "ib-gateway"
 IB_OPERATOR_RESULT_PREFIX = "ib:operator:result:"
 IB_OPERATOR_RESULT_TTL_SEC = 300

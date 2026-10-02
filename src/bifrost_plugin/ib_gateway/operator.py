@@ -9,10 +9,16 @@ from typing import Any, Awaitable, Callable, Dict
 
 from redis.exceptions import ResponseError
 
-from bifrost_plugin.ib_gateway.protocol import CommandMessage, dumps_result, parse_stream_fields
+from bifrost_plugin.ib_gateway.protocol import (
+    READ_ONLY_OPS,
+    CommandMessage,
+    dumps_result,
+    parse_stream_fields,
+)
 from bifrost_plugin.ib_gateway.redis_keys import (
     IB_OPERATOR_CMD_STREAM,
     IB_OPERATOR_CONSUMER_GROUP,
+    IB_OPERATOR_ENV_CMD_STREAMS,
 )
 from bifrost_plugin.ib_gateway.writer import GatewayRedisWriter
 
@@ -43,10 +49,11 @@ async def operator_loop(
     stop: asyncio.Event,
     block_ms: int = 5000,
 ) -> None:
-    stream = IB_OPERATOR_CMD_STREAM
+    streams = (IB_OPERATOR_CMD_STREAM, *IB_OPERATOR_ENV_CMD_STREAMS)
     group = IB_OPERATOR_CONSUMER_GROUP
     consumer = consumer_name()
-    ensure_stream_and_group(rds, stream, group)
+    for stream in streams:
+        ensure_stream_and_group(rds, stream, group)
 
     while not stop.is_set():
         try:
@@ -54,13 +61,14 @@ async def operator_loop(
                 rds.xreadgroup,
                 group,
                 consumer,
-                {stream: ">"},
+                {stream: ">" for stream in streams},
                 count=10,
                 block=block_ms,
             )
         except ResponseError as e:
             if "nogroup" in str(e).lower():
-                ensure_stream_and_group(rds, stream, group)
+                for stream in streams:
+                    ensure_stream_and_group(rds, stream, group)
                 continue
             logger.warning("xreadgroup error: %s", e)
             await asyncio.sleep(1)
@@ -70,9 +78,15 @@ async def operator_loop(
             await asyncio.sleep(1)
             continue
 
-        for _stream_name, entries in reply or []:
+        for stream_name, entries in reply or []:
+            stream = stream_name.decode() if isinstance(stream_name, bytes) else str(stream_name)
             for entry_id, fields in entries:
                 await _process_entry(rds, writer, handler, stream, group, entry_id, fields)
+
+
+def op_allowed_on_stream(op: str, stream: str) -> bool:
+    """A per-env stream answers read ops only; the production stream answers every op."""
+    return stream not in IB_OPERATOR_ENV_CMD_STREAMS or op in READ_ONLY_OPS
 
 
 async def _process_entry(
@@ -94,6 +108,9 @@ async def _process_entry(
         return
     if msg.is_expired():
         envelope = {"ok": False, "error": "deadline_expired", "req_id": msg.req_id}
+    elif not op_allowed_on_stream(msg.op, stream):
+        logger.warning("refused op %s on %s (caller=%s): read ops only", msg.op, stream, msg.caller)
+        envelope = {"ok": False, "error": f"op_not_allowed_on_stream:{msg.op}", "req_id": msg.req_id}
     else:
         try:
             data = await handler(msg)

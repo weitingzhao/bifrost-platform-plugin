@@ -32,9 +32,13 @@ Trade **Market API** `GET /quotes?contract_keys=…` registers OPT contract keys
 Delivers shared IB data Redis in `data` NS:
 
 - `redis-ib` Deployment (no persistence — all keys rebuild from TWS)
-- ACL users: `ib-gateway`, `trade-prod`, `trade-dev`, `platform`
-- Key patterns include `bifrost:health:daemon_*` (Trade account-sync / daemon health HSET)
-- `trade-dev` is **read-only observe**; K8s Dev Trade workloads that consume streams (account-sync) must use `trade-prod`
+- ACL users: `ib-gateway`, `trade-prod`, `trade-dev`, `trade-stg`, `platform`
+- `trade-prod` is PROD Trade's alone. DEV and STG Trade each use their own user (`trade-dev` / `trade-stg`):
+  they read the bus and write only their own operator stream (`ib:operator:cmd:dev` / `:stg`) plus on-demand
+  quote registrations. The gateway answers read ops only on those two streams — `disconnect_all` /
+  `reconnect_all` stay on PROD's `ib:operator:cmd` (debt TD-21). `tests/test_redis_ib_acl.py` pins what each user may do.
+- Changing users on the live bus: `scripts/redis-ib-env-users.sh acl` (ACL LOAD — no restart; redis-ib keeps
+  nothing on disk, so a restart empties the bus), then `switch dev|stg`, `check`, and `rollback dev|stg` if needed.
 - NetworkPolicy: ingress from Trade + Platform NS only
 - ExternalName aliases in `bifrost-{dev,stg,prod}`
 

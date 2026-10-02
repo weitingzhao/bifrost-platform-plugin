@@ -21,6 +21,11 @@ ALL_OPS: Tuple[str, ...] = (
     "reconnect_all",
 )
 
+# Ops that only read from IB (or refresh the gateway's own quote cache). These are the only ops
+# answered on a per-env command stream; disconnect_all / reconnect_all act on the connection
+# every environment shares and stay on the production stream.
+READ_ONLY_OPS: Tuple[str, ...] = tuple(op for op in ALL_OPS if op not in ("disconnect_all", "reconnect_all"))
+
 
 @dataclass
 class CommandMessage:

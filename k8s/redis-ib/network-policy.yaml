@@ -1,5 +1,5 @@
 # redis-ib ingress — Trade + Platform NS + same-namespace IB Gateway pods.
-# ACL enforces write isolation (trade-dev read-only on operator keys).
+# ACL enforces write isolation (trade-dev / trade-stg write only their own operator stream).
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
