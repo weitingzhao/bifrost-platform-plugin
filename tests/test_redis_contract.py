@@ -1,4 +1,7 @@
-"""Phase 0 placeholder — redis-ib contract smoke tests."""
+"""redis-ib key helpers and gateway health shape.
+
+The key names themselves are checked against Trade core's list in test_redis_key_manifest.py.
+"""
 
 from unittest.mock import MagicMock
 

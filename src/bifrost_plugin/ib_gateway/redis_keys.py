@@ -1,4 +1,8 @@
-"""Redis key names — must match bifrost-trade-socket ib/* modules."""
+"""redis-ib key names the gateway writes and Trade core reads.
+
+Every public name here is listed in tests/contracts/redis_ib_keys.json, a byte-identical copy of
+bifrost-trade-core's; tests/test_redis_key_manifest.py fails when they drift (debt TD-31).
+"""
 
 IB_INGESTER_HEALTH_KEY = "bifrost:health:ws_ib_ingestor"
 IB_INGESTER_CHANNEL = "ib:ingester:channel"
@@ -9,7 +13,7 @@ IB_INGESTER_ON_DEMAND_STK = "ib:ingester:control:on_demand_stk"
 IB_INGESTER_ON_DEMAND_STK_TS = "ib:ingester:control:on_demand_stk_ts"
 ON_DEMAND_STK_DEFAULT_MAX_AGE_SEC = 120
 
-# OPT on-demand cache (one-shot inquiry — not continuous stream). Must match bifrost-core.
+# OPT on-demand cache (one-shot inquiry — not continuous stream).
 IB_OPTION_CACHE_PREFIX = "ib:option:cache:"
 IB_OPTION_CACHE_TTL_SEC = 300
 IB_OPTION_ON_DEMAND_SET = "ib:option:control:on_demand_opt"
@@ -36,7 +40,7 @@ IB_OPERATOR_RESULT_TTL_SEC = 300
 IB_GATEWAY_HEALTH_PREFIX = "ib:health:"
 IB_GATEWAY_SELF_HEAL_KEY = "ib:control:gateway_self_heal"
 
-# Canonical STK contract_key — must match bifrost_core / trade-socket ingestor.
+# Canonical STK contract_key suffix (Trade core builds the same keys).
 STK_CONTRACT_KEY_SUFFIX = "|STK|||"
 
 

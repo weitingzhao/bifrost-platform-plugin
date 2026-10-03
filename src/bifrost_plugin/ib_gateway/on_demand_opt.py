@@ -1,6 +1,7 @@
 """On-demand OPT control keys on redis-ib (Market Live → Gateway one-shot cache).
 
-Mirrors bifrost_core.core.realtime.on_demand_opt without importing bifrost-core.
+Same protocol as bifrost_core.core.realtime.on_demand_opt, without importing bifrost-core; the key
+names are checked against core's through tests/contracts/redis_ib_keys.json (TD-31).
 """
 
 from __future__ import annotations
