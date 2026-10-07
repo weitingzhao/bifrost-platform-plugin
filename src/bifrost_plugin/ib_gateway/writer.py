@@ -11,8 +11,6 @@ from bifrost_plugin.ib_gateway.redis_keys import (
     IB_ACCOUNT_AGENT_HEALTH_KEY,
     IB_ACCOUNT_NOTIFY_CHANNEL,
     IB_ACCOUNT_SNAPSHOT_KEY,
-    IB_ACCOUNT_STREAM_KEY,
-    IB_ACCOUNT_STREAM_MAXLEN,
     IB_GATEWAY_HEALTH_PREFIX,
     IB_GATEWAY_SELF_HEAL_KEY,
     IB_INGESTER_CHANNEL,
@@ -70,14 +68,19 @@ class GatewayRedisWriter:
         """Raw redis-ib client (on-demand control reads)."""
         return self._rds
 
+    def _health_fields(self, fields: Dict[str, Any]) -> Dict[str, Any]:
+        # Timestamp last, so a caller cannot freeze a stale updated_at (TD-104).
+        # A git SHA on this hash, if added, belongs to another lane; this writer does not set one.
+        return {"env": self._env, "plugin": "ib-gateway", **fields, "updated_at": time.time()}
+
     def write_ingestor_health(self, fields: Dict[str, Any]) -> None:
-        self._write_hash(IB_INGESTER_HEALTH_KEY, {"env": self._env, "plugin": "ib-gateway", **fields})
+        self._write_hash(IB_INGESTER_HEALTH_KEY, self._health_fields(fields))
 
     def write_account_health(self, fields: Dict[str, Any]) -> None:
-        self._write_hash(IB_ACCOUNT_AGENT_HEALTH_KEY, {"env": self._env, "plugin": "ib-gateway", **fields})
+        self._write_hash(IB_ACCOUNT_AGENT_HEALTH_KEY, self._health_fields(fields))
 
     def write_operator_health(self, fields: Dict[str, Any]) -> None:
-        self._write_hash(IB_OPERATOR_HEALTH_KEY, {"env": self._env, "plugin": "ib-gateway", **fields})
+        self._write_hash(IB_OPERATOR_HEALTH_KEY, self._health_fields(fields))
 
     def write_account_snapshot(self, payload: Dict[str, Any]) -> None:
         self._account_version += 1
@@ -87,19 +90,6 @@ class GatewayRedisWriter:
         raw = json.dumps(body, separators=(",", ":"), default=str)
         self._rds.set(IB_ACCOUNT_SNAPSHOT_KEY, raw)
         self._rds.publish(IB_ACCOUNT_NOTIFY_CHANNEL, str(body["version"]))
-        try:
-            self._rds.xadd(
-                IB_ACCOUNT_STREAM_KEY,
-                {
-                    "version": str(body["version"]),
-                    "updated_at": str(body["updated_at"]),
-                    "payload": raw,
-                },
-                maxlen=IB_ACCOUNT_STREAM_MAXLEN,
-                approximate=True,
-            )
-        except Exception as e:
-            logger.warning("account stream xadd failed: %s", e)
 
     def write_operator_result(self, req_id: str, envelope: Dict[str, Any]) -> None:
         key = IB_OPERATOR_RESULT_PREFIX + req_id

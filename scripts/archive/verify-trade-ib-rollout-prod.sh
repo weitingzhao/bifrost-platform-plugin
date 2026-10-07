@@ -2,7 +2,7 @@
 # TIBM Rollout prod complete — aggregate W1+W2+W3 + program verify + D10 observe-safe guards.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
 # shellcheck disable=SC1091

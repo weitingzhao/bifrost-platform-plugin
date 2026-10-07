@@ -2,7 +2,7 @@
 # TIBM Rollout dev-compose — local compose W1+W2 + program verify (trade-dev ACL) + D10 guards.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INFRA="${TRADE_INFRA_ROOT:-$ROOT/../bifrost-trade-infra}"
 COMPOSE=(docker compose -f "$INFRA/docker-compose.dev.yml")
 MONITOR_PORT="${DEV_MONITOR_PORT:-8765}"

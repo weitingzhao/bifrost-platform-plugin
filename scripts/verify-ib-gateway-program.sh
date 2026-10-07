@@ -6,8 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLATFORM_API="${PLATFORM_API:-http://127.0.0.1:8780}"
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 
-echo "== [1/4] Trade cutover (IBGP3) =="
-make -C "$ROOT" verify-trade-cutover
+echo "== [1/4] Trade cutover (archived, TD-125) =="
+bash "$ROOT/scripts/archive/verify-trade-cutover.sh"
 
 echo ""
 echo "== [2/4] Live TWS (IBGP4) =="

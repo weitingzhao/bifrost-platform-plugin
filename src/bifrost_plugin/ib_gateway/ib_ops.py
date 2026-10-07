@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -68,16 +67,20 @@ async def fetch_accounts_snapshot_rows(ib: Any) -> List[Dict[str, Any]]:
     account_ids = _managed_account_ids(ib)
     if not account_ids:
         return []
+    positions_ok = True
     try:
         await ib.reqPositionsAsync()
         all_positions = list(ib.positions())
     except Exception as e:
+        # A failed read is not an empty book: omit `positions` (TD-212).
         logger.warning("reqPositionsAsync: %s", e)
+        positions_ok = False
         all_positions = []
 
     out: List[Dict[str, Any]] = []
     for aid in account_ids:
         summary: Dict[str, Any] = {}
+        summary_ok = True
         try:
             values = await ib.accountSummaryAsync(aid)
             for v in values or []:
@@ -86,21 +89,88 @@ async def fetch_accounts_snapshot_rows(ib: Any) -> List[Dict[str, Any]]:
                 if tag and val is not None:
                     summary[str(tag)] = val
         except Exception as e:
+            # No NetLiquidation key: the worker must not null the stored NAV (TD-212).
             logger.warning("accountSummaryAsync %s: %s", aid, e)
+            summary_ok = False
         if aid:
             summary["account"] = aid
-        acct_positions = [p for p in all_positions if getattr(p, "account", None) == aid]
-        out.append(
-            {
-                "account_id": aid,
-                "summary": summary,
-                "positions": [position_to_dict(p) for p in acct_positions],
-            }
-        )
+        row: Dict[str, Any] = {
+            "account_id": aid,
+            "summary": summary,
+            "summary_ok": summary_ok,
+            "positions_ok": positions_ok,
+        }
+        if positions_ok:
+            acct_positions = [p for p in all_positions if getattr(p, "account", None) == aid]
+            row["positions"] = [position_to_dict(p) for p in acct_positions]
+        out.append(row)
     return out
 
 
-async def fetch_executions(ib: Any, *, days: int = 7, account: Optional[str] = None) -> List[Dict[str, Any]]:
+def _order_to_dict(trade: Any) -> Dict[str, Any]:
+    """One working order, the shape ``write_open_orders`` stores. Read-only."""
+    from bifrost_plugin.ib_gateway.redis_keys import stk_contract_key
+
+    order = getattr(trade, "order", None)
+    contract = getattr(trade, "contract", None)
+    status = getattr(trade, "orderStatus", None)
+    symbol = getattr(contract, "symbol", "") or ""
+    sec_type = getattr(contract, "secType", "") or ""
+    if sec_type == "STK":
+        contract_key = stk_contract_key(symbol)
+    else:
+        contract_key = "|".join(
+            [
+                symbol,
+                sec_type,
+                str(getattr(contract, "lastTradeDateOrContractMonth", "") or ""),
+                str(getattr(contract, "strike", "") or ""),
+                str(getattr(contract, "right", "") or ""),
+            ]
+        )
+    limit = getattr(order, "lmtPrice", None)
+    try:
+        limit_f = float(limit) if limit not in (None, "") else None
+    except (TypeError, ValueError):
+        limit_f = None
+    return {
+        "order_id": getattr(order, "orderId", None),
+        "perm_id": getattr(order, "permId", None),
+        "account_id": getattr(order, "account", None),
+        "symbol": symbol,
+        "sec_type": sec_type,
+        "action": getattr(order, "action", None),
+        "total_quantity": float(getattr(order, "totalQuantity", 0) or 0),
+        "filled": float(getattr(status, "filled", 0) or 0),
+        "remaining": float(getattr(status, "remaining", 0) or 0),
+        "limit_price": limit_f,
+        "status": getattr(status, "status", None),
+        "contract_key": contract_key,
+    }
+
+
+async def fetch_open_orders(ib: Any) -> List[Dict[str, Any]]:
+    """Read-only working orders for this gateway client (``reqOpenOrders``).
+
+    Does not place, modify, or cancel. A caller that cannot complete the read must
+    omit the snapshot key: an empty list is a real flat book (TD-211).
+    """
+    if not getattr(ib, "isConnected", lambda: False)():
+        return []
+    req = getattr(ib, "reqOpenOrdersAsync", None)
+    if req is None:
+        raise RuntimeError("reqOpenOrdersAsync is not available")
+    trades = await req()
+    return [_order_to_dict(t) for t in (trades or [])]
+
+
+async def fetch_executions(
+    ib: Any,
+    *,
+    days: int = 7,
+    account: Optional[str] = None,
+    wait_commission: bool = True,
+) -> List[Dict[str, Any]]:
     from ib_insync import ExecutionFilter, Fill  # noqa: PLC0415
 
     time_str = ""
@@ -124,7 +194,8 @@ async def fetch_executions(ib: Any, *, days: int = 7, account: Optional[str] = N
     ib.commissionReportEvent += on_commission_report
     try:
         fills = await ib.reqExecutionsAsync(ef)
-        await asyncio.sleep(3.0)
+        if wait_commission:
+            await asyncio.sleep(3.0)
     finally:
         ib.commissionReportEvent -= on_commission_report
 

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from bifrost_plugin.ib_gateway import operator
-from bifrost_plugin.ib_gateway.protocol import ALL_OPS, READ_ONLY_OPS, CommandMessage
+from bifrost_plugin.ib_gateway.protocol import ALL_OPS, PROD_ONLY_OPS, READ_ONLY_OPS, CommandMessage
 from bifrost_plugin.ib_gateway.redis_keys import (
     IB_OPERATOR_CMD_STREAM,
     IB_OPERATOR_CONSUMER_GROUP,
@@ -23,8 +23,14 @@ def test_env_streams_are_the_production_stream_suffixed() -> None:
     assert IB_OPERATOR_ENV_CMD_STREAMS == (IB_OPERATOR_CMD_STREAM + ":dev", IB_OPERATOR_CMD_STREAM + ":stg")
 
 
-def test_read_only_ops_leave_out_the_connection_ops() -> None:
-    assert set(ALL_OPS) - set(READ_ONLY_OPS) == {"disconnect_all", "reconnect_all"}
+def test_every_op_is_in_exactly_one_allowlist() -> None:
+    """TD-105: a new ALL_OPS member fails here until it is named in exactly one set."""
+    read_only = set(READ_ONLY_OPS)
+    prod_only = set(PROD_ONLY_OPS)
+    assert len(read_only) == len(READ_ONLY_OPS)
+    assert len(prod_only) == len(PROD_ONLY_OPS)
+    assert read_only.isdisjoint(prod_only)
+    assert read_only | prod_only == set(ALL_OPS)
 
 
 @pytest.mark.parametrize("op", ALL_OPS)

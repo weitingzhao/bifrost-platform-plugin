@@ -2,7 +2,7 @@
 # TIBM4 — verify Trade UI/ops paths reflect Platform IB Gateway (not legacy socket STS).
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 DEFAULT_KUBECONFIG="$HOME/.kube/bifrost-k3s.yaml"
 source "$ENV_FILE"

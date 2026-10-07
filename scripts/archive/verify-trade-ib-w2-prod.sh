@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# TIBM Rollout W2 — STG verify after Celery bars RETIRED (Polygon Plugin owns stock OHLC ingest).
+# TIBM Rollout W2 — PROD verify after Celery bars RETIRED (Polygon Plugin owns stock OHLC ingest).
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
-NS="${STG_NAMESPACE:-bifrost-stg}"
+NS="${PROD_NAMESPACE:-bifrost-prod}"
 
-echo "== TIBM W2 STG runtime verify (Celery bars RETIRED) =="
+echo "== TIBM W2 PROD runtime verify (Celery bars RETIRED) =="
 echo
 
 echo "== [1/4] No stocks_ib Celery worker deployment =="
@@ -46,4 +46,4 @@ fi
 echo "  worker Celery/bars packages removed OK"
 
 echo
-echo "TIBM W2 STG runtime verification OK (Celery bars superseded by Market Data Plugin)"
+echo "TIBM W2 PROD runtime verification OK (Celery bars superseded by Market Data Plugin)"

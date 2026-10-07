@@ -2,7 +2,7 @@
 # Trade IB Client Migration — dev-compose program gate (trade-dev read + trade-prod RPC program).
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 echo "== Trade IB Client Migration program verify (dev-compose) =="

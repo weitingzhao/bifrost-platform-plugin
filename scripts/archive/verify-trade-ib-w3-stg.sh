@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
-# TIBM Rollout W3 — runtime verify prod read-only API domains after image rollout.
+# TIBM Rollout W3 — runtime verify STG read-only API domains after image rollout.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
-# shellcheck disable=SC1091
-source "$(dirname "$0")/lib/tibm_prod_defaults.sh"
-NS="${PROD_NAMESPACE}"
-PROD_HOST="${PROD_GATEWAY_HOST}"
-PROD_IP="${PROD_GATEWAY_IP}"
+NS="${STG_NAMESPACE:-bifrost-stg}"
+# Traefik NodePort escape hatch (trade-gateway-ip :30880) — no Host header.
+# VIP alt: STG_TRADE_BASE_URL=https://192.168.10.100 STG_TRADE_HOST=stg.trader.bifrost.lan
+STG_BASE_URL="${STG_TRADE_BASE_URL:-http://192.168.10.73:30880}"
+STG_HOST="${STG_TRADE_HOST:-}"
 MIN_CORE_VERSION="${TIBM_W3_MIN_CORE_VERSION:-0.2.10}"
+
+stg_curl() {
+  if [[ -n "${STG_HOST}" ]]; then
+    curl -sf -H "Host: ${STG_HOST}" "$@"
+  else
+    curl -sf "$@"
+  fi
+}
 
 W3_DEPLOYMENTS=(
   api-market
@@ -20,7 +28,7 @@ W3_DEPLOYMENTS=(
   api-trading
 )
 
-echo "== TIBM W3 prod runtime verify =="
+echo "== TIBM W3 STG runtime verify =="
 echo
 
 echo "== [1/6] W3 API deployments ready =="
@@ -29,13 +37,13 @@ for dep in "${W3_DEPLOYMENTS[@]}"; do
   echo "  ${dep} available"
 done
 
-echo "== [2/6] Daemon observe-safe (D10) =="
+echo "== [2/6] Daemon still scaled down (D10) =="
 daemon_replicas=$(kubectl get deploy daemon -n "${NS}" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "missing")
-if [[ "$daemon_replicas" -lt 1 ]]; then
-  echo "ERROR: daemon replicas=${daemon_replicas} (prod observe-safe expects >=1)" >&2
+if [[ "$daemon_replicas" != "0" ]]; then
+  echo "ERROR: daemon replicas=${daemon_replicas} (expected 0 for D10)" >&2
   exit 1
 fi
-echo "  daemon replicas=${daemon_replicas} OK"
+echo "  daemon replicas=0 OK"
 
 echo "== [3/6] bifrost-core >= ${MIN_CORE_VERSION} on all W3 API pods =="
 for dep in "${W3_DEPLOYMENTS[@]}"; do
@@ -62,7 +70,7 @@ for path in \
   "/api/portfolio/health" \
   "/api/docs/health" \
   "/api/trading/health"; do
-  code=$(curl -sf -o /dev/null -w "%{http_code}" -H "Host: ${PROD_HOST}" "http://${PROD_IP}${path}" || echo "000")
+  code=$(stg_curl -o /dev/null -w "%{http_code}" "${STG_BASE_URL}${path}" || echo "000")
   if [[ "$code" != "200" ]]; then
     echo "ERROR: ${path} HTTP ${code} (expected 200)" >&2
     exit 1
@@ -71,8 +79,8 @@ for path in \
 done
 
 echo "== [5/6] Trading read-only smoke (GET /executions/freshness) =="
-fresh_code=$(curl -sf -o /dev/null -w "%{http_code}" -H "Host: ${PROD_HOST}" \
-  "http://${PROD_IP}/api/trading/executions/freshness" || echo "000")
+fresh_code=$(stg_curl -o /dev/null -w "%{http_code}" \
+  "${STG_BASE_URL}/api/trading/executions/freshness" || echo "000")
 if [[ "$fresh_code" != "200" ]]; then
   echo "ERROR: /api/trading/executions/freshness HTTP ${fresh_code}" >&2
   exit 1
@@ -80,7 +88,7 @@ fi
 echo "  /api/trading/executions/freshness HTTP 200"
 
 echo "== [6/6] Market quotes smoke (redis-ib + GET /quotes) =="
-quotes_json=$(curl -sf -H "Host: ${PROD_HOST}" "http://${PROD_IP}/api/market/quotes?symbols=NVDA" || true)
+quotes_json=$(stg_curl "${STG_BASE_URL}/api/market/quotes?symbols=NVDA" || true)
 if [[ -z "$quotes_json" ]]; then
   echo "ERROR: GET /api/market/quotes failed" >&2
   exit 1
@@ -90,7 +98,7 @@ import json, sys
 d = json.loads(sys.argv[1])
 assert 'quotes' in d, 'missing quotes key'
 if d.get('message') == 'Real-time quotes disabled or Redis unavailable':
-    raise SystemExit('ERROR: Market API redis_quotes unavailable — check redis-live-prod + redis_ib config')
+    raise SystemExit('ERROR: Market API redis_quotes unavailable — check redis-live-stg + redis_ib config')
 print('  GET /api/market/quotes OK (quotes len=%d)' % len(d.get('quotes') or []))
 " "$quotes_json"
 
@@ -123,4 +131,4 @@ else
 fi
 
 echo
-echo "TIBM W3 prod runtime verification OK"
+echo "TIBM W3 STG runtime verification OK"

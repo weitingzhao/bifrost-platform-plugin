@@ -1,4 +1,4 @@
-.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-rpc-parity verify-trade-ib-health verify-trade-ib-ui verify-trade-ib-migration-program verify-trade-ib-migration-program-dev sync-redis-ib-dev-compose-config verify-trade-ib-w1-stg verify-trade-ib-w2-stg verify-trade-ib-w3-stg verify-trade-ib-rollout-stg verify-trade-ib-rollout-dev-compose verify-trade-ib-w1-prod verify-trade-ib-w2-prod verify-trade-ib-w3-prod verify-trade-ib-rollout-prod verify-tibm-strategy-alignment ib-gateway-set-live verify-ib-gateway-program verify-trade-cutover verify-trade-quotes-e2e sync-redis-ib-secrets test lint
+.PHONY: install-dev install-redis-ib apply-external-names verify-redis-ib install-ib-gateway verify-ib-gateway verify-ib-gateway-live verify-ib-gateway-rpc-parity sync-redis-ib-dev-compose-config ib-gateway-set-live verify-ib-gateway-program verify-trade-quotes-e2e sync-redis-ib-secrets test lint
 
 KUBECONFIG ?= $(HOME)/.kube/bifrost-k3s.yaml
 export KUBECONFIG
@@ -30,75 +30,11 @@ verify-ib-gateway-rpc-parity:
 	chmod +x scripts/verify-ib-gateway-rpc-parity.sh
 	./scripts/verify-ib-gateway-rpc-parity.sh
 
-verify-trade-ib-health:
-	chmod +x scripts/verify-trade-ib-health.sh
-	./scripts/verify-trade-ib-health.sh
-
-verify-trade-ib-ui:
-	chmod +x scripts/verify-trade-ib-ui.sh
-	./scripts/verify-trade-ib-ui.sh
-
-verify-trade-ib-migration-program:
-	chmod +x scripts/verify-trade-ib-migration-program.sh
-	./scripts/verify-trade-ib-migration-program.sh
-
-verify-trade-ib-migration-program-dev:
-	chmod +x scripts/verify-trade-ib-migration-program-dev.sh scripts/verify-trade-ib-dev-read.sh
-	./scripts/verify-trade-ib-migration-program-dev.sh
-
-verify-trade-ib-dev-read:
-	chmod +x scripts/verify-trade-ib-dev-read.sh
-	./scripts/verify-trade-ib-dev-read.sh
+# TIBM-era verify scripts live in scripts/archive and are not current procedures (TD-125).
 
 sync-redis-ib-dev-compose-config:
 	chmod +x scripts/sync-redis-ib-dev-compose-config.sh
 	./scripts/sync-redis-ib-dev-compose-config.sh
-
-
-verify-trade-ib-w1-stg:
-	chmod +x scripts/verify-trade-ib-w1-stg.sh
-	./scripts/verify-trade-ib-w1-stg.sh
-
-
-verify-trade-ib-w2-stg:
-	chmod +x scripts/verify-trade-ib-w2-stg.sh
-	./scripts/verify-trade-ib-w2-stg.sh
-
-
-verify-trade-ib-w3-stg:
-	chmod +x scripts/verify-trade-ib-w3-stg.sh
-	./scripts/verify-trade-ib-w3-stg.sh
-
-verify-trade-ib-rollout-stg:
-	chmod +x scripts/verify-trade-ib-rollout-stg.sh
-	./scripts/verify-trade-ib-rollout-stg.sh
-
-
-verify-trade-ib-rollout-dev-compose:
-	chmod +x scripts/verify-trade-ib-rollout-dev-compose.sh scripts/ensure-redis-ib-port-forward.sh
-	./scripts/verify-trade-ib-rollout-dev-compose.sh
-
-
-verify-trade-ib-w1-prod:
-	chmod +x scripts/verify-trade-ib-w1-prod.sh scripts/lib/tibm_prod_defaults.sh
-	./scripts/verify-trade-ib-w1-prod.sh
-
-verify-trade-ib-w2-prod:
-	chmod +x scripts/verify-trade-ib-w2-prod.sh scripts/lib/tibm_prod_defaults.sh
-	./scripts/verify-trade-ib-w2-prod.sh
-
-verify-trade-ib-w3-prod:
-	chmod +x scripts/verify-trade-ib-w3-prod.sh scripts/lib/tibm_prod_defaults.sh
-	./scripts/verify-trade-ib-w3-prod.sh
-
-verify-trade-ib-rollout-prod:
-	chmod +x scripts/verify-trade-ib-rollout-prod.sh scripts/lib/tibm_prod_defaults.sh
-	./scripts/verify-trade-ib-rollout-prod.sh
-
-
-verify-tibm-strategy-alignment:
-	chmod +x scripts/verify-tibm-strategy-alignment.sh scripts/lib/tibm_prod_defaults.sh
-	./scripts/verify-tibm-strategy-alignment.sh
 
 ib-gateway-set-live:
 	chmod +x scripts/ib-gateway-set-live.sh
@@ -107,10 +43,6 @@ ib-gateway-set-live:
 verify-ib-gateway-program:
 	chmod +x scripts/verify-ib-gateway-program.sh
 	./scripts/verify-ib-gateway-program.sh
-
-verify-trade-cutover:
-	chmod +x scripts/verify-trade-cutover.sh scripts/lib/redis_operator_ping.sh
-	./scripts/verify-trade-cutover.sh
 
 verify-trade-quotes-e2e:
 	chmod +x scripts/verify-trade-quotes-e2e.sh

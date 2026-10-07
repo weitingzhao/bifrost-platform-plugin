@@ -2,7 +2,7 @@
 # IBGP3 — verify Trade cutover: legacy IB socket retired, Trade reads Platform redis-ib bus.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 export KUBECONFIG
@@ -71,7 +71,7 @@ done
 
 echo "== [5/5] Operator RPC via trade-prod ACL =="
 # shellcheck disable=SC1091
-source "$(dirname "$0")/lib/redis_operator_ping.sh"
+source "$(dirname "$0")/../lib/redis_operator_ping.sh"
 REQ_ID="cutover-verify-$$"
 RESULT=$(redis_operator_ping "redis://trade-prod:${REDIS_IB_TRADE_PROD_PASS}@127.0.0.1:6379" "$REQ_ID" 15)
 echo "$RESULT" | head -c 120

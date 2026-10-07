@@ -24,8 +24,6 @@ ON_DEMAND_OPT_DEFAULT_MAX_AGE_SEC = 180
 IB_ACCOUNT_AGENT_HEALTH_KEY = "bifrost:health:ws_ib_account_agent"
 IB_ACCOUNT_SNAPSHOT_KEY = "ib:account:snapshot:v1"
 IB_ACCOUNT_NOTIFY_CHANNEL = "ib:account:notify"
-IB_ACCOUNT_STREAM_KEY = "ib:account:stream:v1"
-IB_ACCOUNT_STREAM_MAXLEN = 1000
 
 IB_OPERATOR_HEALTH_KEY = "bifrost:health:ws_ib_operator"
 IB_OPERATOR_CMD_STREAM = "ib:operator:cmd"

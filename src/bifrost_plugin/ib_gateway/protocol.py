@@ -21,10 +21,22 @@ ALL_OPS: Tuple[str, ...] = (
     "reconnect_all",
 )
 
-# Ops that only read from IB (or refresh the gateway's own quote cache). These are the only ops
-# answered on a per-env command stream; disconnect_all / reconnect_all act on the connection
-# every environment shares and stay on the production stream.
-READ_ONLY_OPS: Tuple[str, ...] = tuple(op for op in ALL_OPS if op not in ("disconnect_all", "reconnect_all"))
+# Explicit allowlists (TD-105). A new member of ALL_OPS is in neither set until someone
+# chooses: the env streams must not gain it by default. disconnect_all / reconnect_all act
+# on the connection every environment shares and stay on the production stream.
+READ_ONLY_OPS: Tuple[str, ...] = (
+    "fetch_bars",
+    "fetch_option_expirations",
+    "fetch_option_snapshot",
+    "refresh_option_cache",
+    "fetch_executions",
+    "fetch_accounts_snapshot",
+    "ping",
+)
+PROD_ONLY_OPS: Tuple[str, ...] = (
+    "disconnect_all",
+    "reconnect_all",
+)
 
 
 @dataclass

@@ -14,6 +14,7 @@ from bifrost_plugin.ib_gateway.connection import ConnectionState, SlotConnection
 from bifrost_plugin.ib_gateway.ib_ops import (
     fetch_accounts_snapshot_rows,
     fetch_executions,
+    fetch_open_orders,
     fetch_option_expirations,
     fetch_option_quote_one_shot,
     fetch_option_snapshot,
@@ -59,6 +60,11 @@ class LiveGateway:
         # Opt cache loop liveness: bumped every loop iteration and after every contract.
         self._opt_cache_progress_at = time.time()
         self._opt_cache_stale_warned_at = 0.0
+        # Last successful read-only order / fill reads. None means "do not publish the key".
+        self._open_orders_cache: Optional[List[Dict[str, Any]]] = None
+        self._open_orders_cache_at = 0.0
+        self._executions_cache: Optional[List[Dict[str, Any]]] = None
+        self._executions_cache_at = 0.0
 
     def slot_for_payload(self, payload: Dict[str, Any]) -> Optional[SlotConnection]:
         slot_name = (payload.get("account_slot") or "primary").strip().lower()
@@ -234,6 +240,46 @@ class LiveGateway:
             "opt_cache_progress_ts": round(self._opt_cache_progress_at, 3),
         }
 
+    async def _refresh_order_reads(self) -> None:
+        """Read-only reqOpenOrders / reqExecutions, at most once a minute.
+
+        A failed read clears the cache so the snapshot omits the key. Missing is
+        not an empty book (TD-211). Neither call places, modifies, or cancels.
+        """
+        now = time.time()
+        if now - self._open_orders_cache_at < 60 and self._open_orders_cache is not None:
+            return
+        orders: List[Dict[str, Any]] = []
+        fills: List[Dict[str, Any]] = []
+        saw_slot = False
+        try:
+            for sc in self._slots.values():
+                if sc.ib is None or sc.state != ConnectionState.CONNECTED:
+                    continue
+                saw_slot = True
+                orders.extend(await asyncio.wait_for(fetch_open_orders(sc.ib), timeout=15))
+                fills.extend(
+                    await asyncio.wait_for(
+                        fetch_executions(sc.ib, days=2, wait_commission=False),
+                        timeout=20,
+                    )
+                )
+        except Exception as e:
+            logger.warning("open orders / executions read failed: %s", e)
+            self._open_orders_cache = None
+            self._executions_cache = None
+            self._open_orders_cache_at = 0.0
+            self._executions_cache_at = 0.0
+            return
+        if not saw_slot:
+            self._open_orders_cache = None
+            self._executions_cache = None
+            return
+        self._open_orders_cache = orders
+        self._executions_cache = fills
+        self._open_orders_cache_at = now
+        self._executions_cache_at = now
+
     async def _market_loop(self, stop: asyncio.Event) -> None:
         from ib_insync import Stock  # noqa: PLC0415
 
@@ -297,15 +343,20 @@ class LiveGateway:
 
                 host = self._slots.get("host")
                 sec = self._slots.get("secondary")
-                self._writer.write_account_snapshot(
-                    {
-                        "host_connected": host is not None and host.state == ConnectionState.CONNECTED,
-                        "secondary_connected": sec is not None and sec.state == ConnectionState.CONNECTED,
-                        "accounts_snapshot": snap_accounts,
-                        "accounts_count": len(snap_accounts),
-                        "mode": "live",
-                    }
-                )
+                await self._refresh_order_reads()
+                snapshot_body: Dict[str, Any] = {
+                    "host_connected": host is not None and host.state == ConnectionState.CONNECTED,
+                    "secondary_connected": sec is not None and sec.state == ConnectionState.CONNECTED,
+                    "accounts_snapshot": snap_accounts,
+                    "accounts_count": len(snap_accounts),
+                    "mode": "live",
+                }
+                # Absent key: core must not TRUNCATE. Empty list: the read succeeded and there are none.
+                if self._open_orders_cache is not None:
+                    snapshot_body["open_orders"] = self._open_orders_cache
+                if self._executions_cache is not None:
+                    snapshot_body["last_execution_rows"] = self._executions_cache
+                self._writer.write_account_snapshot(snapshot_body)
                 self._last_snapshot_write_at = time.time()
 
                 if host is None or host.state != ConnectionState.CONNECTED or not snap_accounts:

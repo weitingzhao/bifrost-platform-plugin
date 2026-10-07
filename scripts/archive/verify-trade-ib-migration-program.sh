@@ -2,7 +2,7 @@
 # Trade IB Client Migration — aggregate program verification (TIBM-PC-1).
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 echo "== Trade IB Client Migration program verify =="
