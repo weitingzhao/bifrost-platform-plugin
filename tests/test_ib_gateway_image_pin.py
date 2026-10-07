@@ -5,9 +5,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_deployment_pulls_from_the_registry_and_not_a_local_tag() -> None:
+def test_deployment_pulls_a_registry_digest_and_not_a_local_tag() -> None:
     text = (ROOT / "k8s/ib-gateway/base/deployment.yaml").read_text()
-    assert "192.168.10.73:30500/bifrost-platform-plugin-ib-gateway:" in text
+    # TD-122: pinned by the digest the Tekton build reported, never a mutable tag.
+    assert "192.168.10.73:30500/bifrost-platform-plugin-ib-gateway@sha256:" in text
     assert "imagePullPolicy: Always" in text
     assert "imagePullPolicy: IfNotPresent" not in text
     image_line = next(line.strip() for line in text.splitlines() if line.strip().startswith("image:"))
