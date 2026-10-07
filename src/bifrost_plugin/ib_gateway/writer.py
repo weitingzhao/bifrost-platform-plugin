@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from typing import Any, Dict, Optional, Set
 
@@ -69,9 +70,15 @@ class GatewayRedisWriter:
         return self._rds
 
     def _health_fields(self, fields: Dict[str, Any]) -> Dict[str, Any]:
-        # Timestamp last, so a caller cannot freeze a stale updated_at (TD-104).
-        # A git SHA on this hash, if added, belongs to another lane; this writer does not set one.
-        return {"env": self._env, "plugin": "ib-gateway", **fields, "updated_at": time.time()}
+        # git_sha is the commit baked into this image (TD-122). The timestamp goes
+        # last, so a caller cannot freeze a stale updated_at (TD-104).
+        return {
+            "env": self._env,
+            "plugin": "ib-gateway",
+            **fields,
+            "git_sha": os.environ.get("IB_GATEWAY_GIT_SHA", ""),
+            "updated_at": time.time(),
+        }
 
     def write_ingestor_health(self, fields: Dict[str, Any]) -> None:
         self._write_hash(IB_INGESTER_HEALTH_KEY, self._health_fields(fields))

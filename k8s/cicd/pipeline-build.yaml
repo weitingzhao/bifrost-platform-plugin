@@ -1,0 +1,108 @@
+# Build the IB Gateway image into the in-cluster registry (TD-122).
+#
+# Same shape as bifrost-build-flex-query: Gitea mirror, clone, Kaniko.
+# This image is one repo (no vendored core). The Dockerfile bakes
+# IB_GATEWAY_GIT_SHA from the revision, and Kaniko writes the registry digest
+# to the task result `digest`. The Deployment pins that digest; do not import
+# a laptop image with `ctr images import`.
+#
+# Apply is an Owner step. A run refuses unless the release window's `what`
+# names bifrost-platform-plugin and revision is a 40-character SHA.
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: bifrost-build-ib-gateway
+  namespace: cicd
+  labels:
+    bifrost.io/purpose: plugin-build
+    bifrost.io/plugin: ib-gateway
+spec:
+  description: >-
+    Clone bifrost-platform-plugin at a git SHA, build the IB Gateway image
+    with Kaniko, and push it to the in-cluster registry by digest.
+  params:
+    - name: revision
+      type: string
+      description: 40-character lowercase git SHA baked into the image as IB_GATEWAY_GIT_SHA.
+    - name: giteaBase
+      type: string
+      default: http://gitea.cicd.svc.cluster.local:3000/bifrost
+    - name: image
+      type: string
+      default: registry.cicd.svc.cluster.local:5000/bifrost-platform-plugin-ib-gateway:0.3.0
+  workspaces:
+    - name: source
+  tasks:
+    - name: release-window
+      taskRef:
+        name: bifrost-release-window
+      params:
+        - name: pipeline
+          value: bifrost-build-ib-gateway
+    - name: validate-revision
+      taskRef:
+        name: bifrost-validate-git-sha
+      params:
+        - name: revision
+          value: $(params.revision)
+    - name: mirror-sync
+      runAfter: [release-window, validate-revision]
+      taskRef:
+        name: bifrost-gitea-mirror-sync
+      params:
+        - name: giteaBase
+          value: $(params.giteaBase)
+        - name: mirrorRepos
+          value: "bifrost-platform-plugin"
+        - name: expectSha
+          value: $(params.revision)
+        - name: expectRepo
+          value: bifrost-platform-plugin
+    - name: clone-plugin
+      runAfter: [mirror-sync]
+      taskRef:
+        name: bifrost-git-clone-gitea
+      params:
+        - name: url
+          value: $(params.giteaBase)/bifrost-platform-plugin.git
+        - name: revision
+          value: $(params.revision)
+        - name: subdir
+          value: plugin
+      workspaces:
+        - name: output
+          workspace: source
+    - name: kaniko
+      runAfter: [clone-plugin]
+      workspaces:
+        - name: source
+          workspace: source
+      params:
+        - name: image
+          value: $(params.image)
+        - name: revision
+          value: $(params.revision)
+      taskSpec:
+        params:
+          - name: image
+            type: string
+          - name: revision
+            type: string
+        workspaces:
+          - name: source
+        results:
+          - name: digest
+            description: Registry digest (sha256:...) of the pushed image. Pin the Deployment to it.
+        steps:
+          - name: build-and-push
+            image: gcr.io/kaniko-project/executor:v1.23.2
+            args:
+              - --dockerfile=Dockerfile
+              - --context=$(workspaces.source.path)/plugin
+              - --destination=$(params.image)
+              - --build-arg=GIT_SHA=$(params.revision)
+              - --digest-file=$(results.digest.path)
+              - --custom-platform=linux/amd64
+              - --insecure
+              - --skip-tls-verify
+              - --insecure-registry=registry.cicd.svc.cluster.local:5000

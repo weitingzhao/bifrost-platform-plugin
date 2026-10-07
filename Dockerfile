@@ -10,6 +10,8 @@ RUN pip install --no-cache-dir ".[ib]"
 COPY config/gateway.yaml /config/gateway.yaml
 COPY scripts/run_ib_gateway.py ./scripts/run_ib_gateway.py
 
+ARG GIT_SHA=unknown
+ENV IB_GATEWAY_GIT_SHA=${GIT_SHA}
 ENV IB_GATEWAY_CONFIG=/config/gateway.yaml
 ENV PYTHONUNBUFFERED=1
 

@@ -19,8 +19,11 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: ib-gateway
-          image: bifrost-platform-plugin-ib-gateway:0.3.0
-          imagePullPolicy: IfNotPresent
+          # Registry pull. The tag is the build name; after bifrost-build-ib-gateway
+          # finishes, replace it with @sha256:<digest result> before applying.
+          # Do not import a laptop image with ctr — that path has no digest and no git SHA.
+          image: 192.168.10.73:30500/bifrost-platform-plugin-ib-gateway:0.3.0
+          imagePullPolicy: Always
           env:
             - name: IB_GATEWAY_CONFIG
               value: /config/gateway.yaml
