@@ -13,10 +13,17 @@ fi
 
 # shellcheck disable=SC1090
 source "$ENV_FILE"
+# W-33 LANE-W33D: the redis-ib write users (gateway, trade-prod) live in the
+# Owner's env file. Owner-only script; the Agent gate refuses to run it.
+OWNER_ENV="${BIFROST_OWNER_ENV:-$HOME/.bifrost-owner/owner.env}"
+if [[ -f "$OWNER_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$OWNER_ENV"
+fi
 
 for var in REDIS_IB_GATEWAY_PASS REDIS_IB_TRADE_PROD_PASS REDIS_IB_TRADE_DEV_PASS REDIS_IB_TRADE_STG_PASS REDIS_IB_PLATFORM_PASS; do
   if [[ -z "${!var:-}" || "${!var}" == change-me-* ]]; then
-    echo "Set $var in $ENV_FILE first (scripts/redis-ib-env-users.sh acl creates the Trade env ones)." >&2
+    echo "Set $var in $ENV_FILE or the Owner env file first (scripts/redis-ib-env-users.sh acl creates the Trade env ones)." >&2
     exit 1
   fi
 done

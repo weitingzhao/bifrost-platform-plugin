@@ -17,6 +17,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 TRADE_INFRA="${TRADE_INFRA:-$ROOT/../bifrost-trade-infra}"
+# W-33 LANE-W33D: gateway and trade-prod passwords, and the Trade Secret files,
+# moved to the Owner's directory. Owner-only script; the Agent gate refuses it.
+OWNER_DIR="${BIFROST_OWNER_DIR:-$HOME/.bifrost-owner}"
+OWNER_ENV="${BIFROST_OWNER_ENV:-$OWNER_DIR/owner.env}"
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/bifrost-k3s.yaml}"
 # Trade Deployments that read REDIS_IB_* from bifrost-<env>-secrets.
 TRADE_DEPLOYS=(api-account api-market api-monitor api-research daemon)
@@ -38,6 +42,21 @@ mktemp_private() {  # usage: mktemp_private VAR — sets VAR in the caller (no s
 load_env() {
   # shellcheck disable=SC1090
   source "$ENV_FILE"
+  if [[ -f "$OWNER_ENV" ]]; then
+    # shellcheck disable=SC1090
+    source "$OWNER_ENV"
+  fi
+}
+
+# The gitignored Secret file a Trade env is materialized from: the Owner's copy
+# when it exists, otherwise the infra checkout (before the W-33 move).
+trade_secret_file() {
+  local env="$1"
+  if [[ -f "$OWNER_DIR/secrets/bifrost-$env-secrets.yaml" ]]; then
+    printf '%s' "$OWNER_DIR/secrets/bifrost-$env-secrets.yaml"
+  else
+    printf '%s' "$TRADE_INFRA/k8s/base/secrets/bifrost-$env-secrets.yaml"
+  fi
 }
 
 # redis-cli in the redis-ib pod, authenticated as user $1 with the password in variable $2.
@@ -127,9 +146,9 @@ cmd_acl() {
 set_trade_secret() {
   local env="$1" user="$2" var="$3" patch
   load_env
-  [[ -n "${!var:-}" && "${!var}" != change-me-* ]] || die "$var is not set in $ENV_FILE"
+  [[ -n "${!var:-}" && "${!var}" != change-me-* ]] || die "$var is not set in $ENV_FILE or the Owner env file"
   mktemp_private patch
-  REDIS_IB_SECRET_VALUE="${!var}" python3 - "$user" "$TRADE_INFRA/k8s/base/secrets/bifrost-$env-secrets.yaml" \
+  REDIS_IB_SECRET_VALUE="${!var}" python3 - "$user" "$(trade_secret_file "$env")" \
     >"$patch" <<'PY'
 import json
 import os
