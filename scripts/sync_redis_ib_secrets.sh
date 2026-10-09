@@ -13,6 +13,13 @@ if [[ ! -f "$PLUGIN_ENV" ]]; then
 fi
 # shellcheck disable=SC1090
 source "$PLUGIN_ENV"
+# W-33 LANE-W33D (TD-278): the redis-ib write users (gateway, trade-prod) live
+# in the Owner's env file. Owner-only script; the Agent gate refuses to run it.
+OWNER_ENV="${BIFROST_OWNER_ENV:-$HOME/.bifrost-owner/owner.env}"
+if [[ -f "$OWNER_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$OWNER_ENV"
+fi
 
 DEV_PASS="${REDIS_IB_TRADE_DEV_PASS:?}"
 PROD_PASS="${REDIS_IB_TRADE_PROD_PASS:?}"

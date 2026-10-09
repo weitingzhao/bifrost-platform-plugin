@@ -20,14 +20,13 @@ if [[ ! -f "$INFRA_CFG" ]]; then
   exit 1
 fi
 
-PASS="${REDIS_IB_TRADE_DEV_PASS:?REDIS_IB_TRADE_DEV_PASS missing}"
 # Celery bars + operator RPC require write ACL — use trade-prod locally (trade-dev is read-only).
 REDIS_IB_USER="${REDIS_IB_COMPOSE_USER:-trade-prod}"
-if [[ "$REDIS_IB_USER" == "trade-prod" ]]; then
-  PASS="${REDIS_IB_TRADE_PROD_PASS:?REDIS_IB_TRADE_PROD_PASS missing}"
-fi
 
-python3 - "$INFRA_CFG" "$REDIS_IB_HOST" "$REDIS_IB_PORT" "$REDIS_IB_USER" "$PASS" <<'PY'
+# TD-278: config.dev.yaml is tracked in a public repo. Its password stays empty;
+# the process reads REDIS_IB_PASSWORD from its environment (core gives the
+# environment precedence). This script never reads or writes a password.
+python3 - "$INFRA_CFG" "$REDIS_IB_HOST" "$REDIS_IB_PORT" "$REDIS_IB_USER" <<'PY'
 import re
 import sys
 from pathlib import Path
@@ -36,7 +35,6 @@ path = Path(sys.argv[1])
 host = sys.argv[2]
 port = sys.argv[3]
 username = sys.argv[4]
-password = sys.argv[5]
 text = path.read_text(encoding="utf-8")
 
 block = f"""redis_ib:
@@ -45,7 +43,7 @@ block = f"""redis_ib:
   port: {port}
   db: 0
   username: {username}
-  password: "{password}"
+  password: ""
 """
 
 if re.search(r"^redis_ib:\n", text, re.MULTILINE):
@@ -60,7 +58,7 @@ else:
     out = text[:insert_at] + "\n" + block + text[insert_at:]
 
 path.write_text(out, encoding="utf-8")
-print(f"Updated {path} redis_ib → {username} @ {host}:{port}")
+print(f"Updated {path} redis_ib → {username} @ {host}:{port} (password from REDIS_IB_PASSWORD at runtime)")
 
 ib_op = """ib_operator:
   enabled: true

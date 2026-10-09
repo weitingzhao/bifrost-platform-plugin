@@ -14,6 +14,13 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 # shellcheck disable=SC1090
 source "$ENV_FILE"
+# W-33 LANE-W33D (TD-278): the redis-ib write users (gateway, trade-prod) live
+# in the Owner's env file. Owner-only script; the Agent gate refuses to run it.
+OWNER_ENV="${BIFROST_OWNER_ENV:-$HOME/.bifrost-owner/owner.env}"
+if [[ -f "$OWNER_ENV" ]]; then
+  # shellcheck disable=SC1090
+  source "$OWNER_ENV"
+fi
 
 echo "== [1/4] ConfigMap mode =="
 MODE=$(kubectl get configmap ib-gateway-config -n data -o jsonpath='{.data.mode}')
