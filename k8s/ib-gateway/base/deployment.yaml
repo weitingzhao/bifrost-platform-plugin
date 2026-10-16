@@ -25,7 +25,7 @@ spec:
           # TD-282: the registry was emptied on 2026-10-10 and the old digest could
           # no longer be pulled; 0.4.0 was rebuilt from the same commit into the
           # now persistent registry, hence a new digest.
-          image: 192.168.10.73:30500/bifrost-platform-plugin-ib-gateway@sha256:3395fb7c064fe4c013682895ebabd60425f0e6da70b28e1f77ac846793cb82c7  # 0.4.0 rebuilt (bifrost-build-ib-gateway-ggxv6, 30bd974)
+          image: 192.168.10.73:30500/bifrost-platform-plugin-ib-gateway@sha256:0b8e7e2c3629068d0434d9697de200950db699892f67eb3dd4d99d3246c2d75f  # 0.4.1 (bifrost-build-ib-gateway-1792125760, ad01dd7)
           imagePullPolicy: Always
           env:
             - name: IB_GATEWAY_CONFIG
