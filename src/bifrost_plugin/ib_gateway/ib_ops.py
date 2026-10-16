@@ -227,21 +227,65 @@ async def fetch_executions(
                 pass
         symbol = getattr(contract, "symbol", "") if contract else ""
         sec_type = getattr(contract, "secType", "") if contract else ""
-        out.append(
-            {
-                "exec_id": exec_id,
-                "account": ex.acctNumber if ex else None,
-                "symbol": symbol,
-                "sec_type": sec_type,
-                "side": ex.side if ex else None,
-                "shares": float(ex.shares) if ex and ex.shares is not None else None,
-                "price": float(ex.price) if ex and ex.price is not None else None,
-                "commission": float(commission) if commission is not None else None,
-                "realized_pnl": float(realized_pnl) if realized_pnl is not None else None,
-                "ts": ts,
-            }
-        )
+        row: Dict[str, Any] = {
+            "exec_id": exec_id,
+            "account": ex.acctNumber if ex else None,
+            "symbol": symbol,
+            "sec_type": sec_type,
+            "side": ex.side if ex else None,
+            "shares": float(ex.shares) if ex and ex.shares is not None else None,
+            "price": float(ex.price) if ex and ex.price is not None else None,
+            "commission": float(commission) if commission is not None else None,
+            "realized_pnl": float(realized_pnl) if realized_pnl is not None else None,
+            "ts": ts,
+        }
+        row.update(_execution_contract_fields(contract, ex))
+        out.append(row)
     return out
+
+
+_OPTION_SEC_TYPES = ("OPT", "FOP")
+
+
+def _execution_contract_fields(contract: Any, ex: Any) -> Dict[str, Any]:
+    """What core's execution writer reads beyond the fill itself, under its own names.
+
+    Without expiry / strike / option_right an option fill cannot get a contract key, so core
+    (``portfolio.gateway_fills``, 0.60.1) does not write it and it appears only with Flex the
+    next day. A field the contract does not carry is left out, not sent as an empty value.
+    """
+    fields: Dict[str, Any] = {}
+    con_id = getattr(contract, "conId", 0) if contract else 0
+    if con_id:
+        fields["conid"] = int(con_id)
+    currency = (getattr(contract, "currency", "") or "").strip() if contract else ""
+    if currency:
+        fields["currency"] = currency
+    exchange = (getattr(ex, "exchange", "") or "").strip() if ex else ""
+    if exchange:
+        fields["exchange"] = exchange
+    cum_qty = getattr(ex, "cumQty", None) if ex else None
+    if cum_qty:
+        fields["cum_qty"] = float(cum_qty)
+    sec_type = (getattr(contract, "secType", "") or "").strip().upper() if contract else ""
+    if sec_type not in _OPTION_SEC_TYPES:
+        return fields
+    expiry = (getattr(contract, "lastTradeDateOrContractMonth", "") or "").strip()
+    if expiry:
+        fields["expiry"] = expiry
+    strike = getattr(contract, "strike", 0.0)
+    if strike:
+        fields["strike"] = float(strike)
+    right = (getattr(contract, "right", "") or "").strip().upper()[:1]
+    if right in ("C", "P"):
+        fields["option_right"] = right
+    multiplier = (getattr(contract, "multiplier", "") or "").strip()
+    try:
+        if multiplier:
+            fields["multiplier"] = float(multiplier)
+    except ValueError:
+        pass
+    return fields
 
 
 async def fetch_option_expirations(ib: Any, symbol: str) -> Dict[str, Any]:
